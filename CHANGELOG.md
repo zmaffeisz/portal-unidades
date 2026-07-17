@@ -1,5 +1,7 @@
 # Changelog
 
+- Pedidos de compra: resumo inicial recolhido e itens organizados em lista delimitada.
+
 ## 2026-07-17
 
 - Pedidos de compra novos agora exigem a seleção de uma sala ativa da própria unidade; pedidos anteriores permanecem identificados como sem sala até classificação manual.
