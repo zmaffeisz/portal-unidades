@@ -56,7 +56,7 @@ async function startCoordinator(){
   showOnly('app-screen');document.querySelectorAll('.coordinator-only').forEach(el=>el.hidden=false);document.querySelectorAll('.admin-only').forEach(el=>el.hidden=true);
   $('header-context').textContent=unitName(state.unitId);$('header-name').textContent=state.profile?.nome||state.user.email;$('header-role').textContent='Coordenador de unidade';
   $('welcome-title').textContent=`Olá, ${(state.profile?.nome||'coordenador').split(' ')[0]}!`;
-  await loadCoordinatorData();openTab('overview');subscribeRealtime();
+  await loadCoordinatorData();openTab('inventory');subscribeRealtime();
 }
 async function startAdmin(){
   showOnly('app-screen');document.querySelectorAll('.coordinator-only').forEach(el=>el.hidden=true);document.querySelectorAll('.admin-only').forEach(el=>el.hidden=false);
@@ -69,7 +69,7 @@ async function startAdminUnit(unitId){
   state.unitId=Number(unitId);showOnly('app-screen');document.querySelectorAll('.coordinator-only,.admin-only').forEach(el=>el.hidden=false);
   $('admin-unit-switch').value=String(state.unitId);$('header-context').textContent=unitName(state.unitId);$('header-name').textContent=state.profile?.nome||state.user.email;$('header-role').textContent=state.profile?.papel==='admin'?'Administrador atuando na unidade':'Divisão atuando na unidade';
   $('welcome-title').textContent=`Visão da ${unitName(state.unitId)}`;
-  await loadCoordinatorData();openTab('overview');subscribeRealtime();
+  await loadCoordinatorData();openTab('inventory');subscribeRealtime();
 }
 async function switchAdminUnit(value){
   if(!state.isPortalManager)return;
@@ -291,6 +291,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
   $('login-form').onsubmit=async e=>{e.preventDefault();setBusy(e.currentTarget,true,'Entrando...');const {data,error}=await sb.auth.signInWithPassword({email:$('login-email').value.trim(),password:$('login-password').value});setBusy(e.currentTarget,false);if(error)return toast('E-mail ou senha inválidos.','error');await routeSession(data.session)};
   $('register-form').onsubmit=async e=>{e.preventDefault();if($('register-password').value!==$('register-password-confirm').value)return toast('As senhas não conferem.','error');setBusy(e.currentTarget,true,'Enviando...');const {error}=await sb.auth.signUp({email:$('register-email').value.trim(),password:$('register-password').value,options:{emailRedirectTo:new URL('index.html',location.href).href,data:{portal_unidades:'true',nome:$('register-name').value.trim(),unidade_id:$('register-unit').value}}});setBusy(e.currentTarget,false);if(error)return toast(error.message,'error');toast('Solicitação criada. Confira seu e-mail e aguarde a aprovação.');$('register-view').hidden=true;$('login-view').hidden=false;e.currentTarget.reset()};
   $('signout').onclick=$('pending-signout').onclick=async()=>{await sb.auth.signOut();showOnly('auth-screen')};$('pending-refresh').onclick=async()=>{const {data}=await sb.auth.getSession();await routeSession(data.session)};
+  const legacyOverviewNav=document.querySelector('.nav-item[data-tab="overview"]');if(legacyOverviewNav)legacyOverviewNav.hidden=true;const adminNav=document.querySelector('.nav-item[data-tab="admin"]');if(adminNav)adminNav.lastChild.textContent='Visão geral';const adminHeading=document.querySelector('#tab-admin .page-heading h1');if(adminHeading)adminHeading.textContent='Visão geral';
   document.querySelectorAll('.nav-item').forEach(b=>b.onclick=async()=>{if(state.isPortalManager&&['admin','approvals'].includes(b.dataset.tab))await loadAdminData();openTab(b.dataset.tab)});document.querySelectorAll('[data-goto]').forEach(b=>b.onclick=()=>openTab(b.dataset.goto));
   $('toggle-room-form').onclick=()=>toggleForm('room-form');document.querySelectorAll('[data-close-form]').forEach(b=>b.onclick=()=>{if(b.dataset.closeForm==='inventory-form')$('inventory-room').disabled=false;if(b.dataset.closeForm==='order-form')$('order-room').disabled=false;toggleForm(b.dataset.closeForm,false)});
   $('room-form').onsubmit=submitRoom;$('inventory-form').onsubmit=submitInventory;$('order-form').onsubmit=submitOrder;
