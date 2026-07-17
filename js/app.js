@@ -1,11 +1,12 @@
 const {createClient}=supabase;
 const sb=createClient(PORTAL_CONFIG.supabaseUrl,PORTAL_CONFIG.supabaseKey);
 
-const state={session:null,user:null,profile:null,access:null,isAdmin:false,unitId:null,units:[],rooms:[],inventory:[],orders:[],adminOrders:[],consolidated:[],approvals:[],profiles:[],channel:null,tab:'overview',exportUnitIds:new Set()};
+const state={session:null,user:null,profile:null,access:null,isPortalManager:false,unitId:null,units:[],rooms:[],adminRooms:[],inventory:[],orders:[],adminOrders:[],consolidated:[],approvals:[],channel:null,tab:'overview',exportUnitIds:new Set()};
 const $=id=>document.getElementById(id);
 const esc=v=>String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 const fmtDate=v=>v?new Date(v).toLocaleDateString('pt-BR'):'—';
 const unitName=id=>state.units.find(u=>String(u.id)===String(id))?.nome||'Unidade não identificada';
+const roomName=(id,rooms=state.rooms)=>id?(rooms.find(r=>String(r.id)===String(id))?.nome||'Sala não encontrada'):'Sala não informada (pedido anterior)';
 let toastTimer,reloadTimer;
 
 function toast(message,type='ok'){
@@ -35,12 +36,12 @@ async function routeSession(session){
   state.session=session;state.user=session?.user||null;
   if(!state.user){resetRealtime();showOnly('auth-screen');return;}
   const [{data:profile,error:pErr},{data:access,error:aErr}]=await Promise.all([
-    sb.from('profiles').select('id,nome,email,papel,aprovado').eq('id',state.user.id).maybeSingle(),
+    sb.from('profiles').select('id,nome,email,papel,aprovado,escopo_organizacional').eq('id',state.user.id).maybeSingle(),
     sb.from('portal_unidades_acessos').select('*').eq('user_id',state.user.id).maybeSingle()
   ]);
   if(pErr||aErr){toast('Não foi possível conferir seu acesso.','error');return;}
-  state.profile=profile;state.access=access;state.isAdmin=profile?.papel==='admin'&&profile?.aprovado===true;
-  if(state.isAdmin){state.unitId=null;await startAdmin();return;}
+  state.profile=profile;state.access=access;state.isPortalManager=profile?.aprovado===true&&(profile?.papel==='admin'||profile?.escopo_organizacional==='divisao');
+  if(state.isPortalManager){state.unitId=null;await startAdmin();return;}
   if(!access||access.status!=='APROVADO'){
     showOnly('pending-screen');
     $('pending-title').textContent=access?.status==='REJEITADO'?'Acesso não aprovado':'Aguardando aprovação';
@@ -60,18 +61,18 @@ async function startCoordinator(){
 async function startAdmin(){
   showOnly('app-screen');document.querySelectorAll('.coordinator-only').forEach(el=>el.hidden=true);document.querySelectorAll('.admin-only').forEach(el=>el.hidden=false);
   $('admin-unit-switch').value='';
-  $('header-context').textContent='Visão de todas as unidades';$('header-name').textContent=state.profile?.nome||state.user.email;$('header-role').textContent='Administrador';
+  $('header-context').textContent='Visão de todas as unidades';$('header-name').textContent=state.profile?.nome||state.user.email;$('header-role').textContent=state.profile?.papel==='admin'?'Administrador':'Divisão — gestão do portal';
   $('welcome-title').textContent='Planejamento consolidado';
   await loadAdminData();openTab('admin');subscribeRealtime();
 }
 async function startAdminUnit(unitId){
   state.unitId=Number(unitId);showOnly('app-screen');document.querySelectorAll('.coordinator-only,.admin-only').forEach(el=>el.hidden=false);
-  $('admin-unit-switch').value=String(state.unitId);$('header-context').textContent=unitName(state.unitId);$('header-name').textContent=state.profile?.nome||state.user.email;$('header-role').textContent='Administrador atuando na unidade';
+  $('admin-unit-switch').value=String(state.unitId);$('header-context').textContent=unitName(state.unitId);$('header-name').textContent=state.profile?.nome||state.user.email;$('header-role').textContent=state.profile?.papel==='admin'?'Administrador atuando na unidade':'Divisão atuando na unidade';
   $('welcome-title').textContent=`Visão da ${unitName(state.unitId)}`;
   await loadCoordinatorData();openTab('overview');subscribeRealtime();
 }
 async function switchAdminUnit(value){
-  if(!state.isAdmin)return;
+  if(!state.isPortalManager)return;
   document.querySelectorAll('.inline-form').forEach(form=>form.hidden=true);
   if(!value){state.unitId=null;await startAdmin();return;}
   await startAdminUnit(value);
@@ -91,6 +92,7 @@ function renderCoordinator(){renderRoomOptions();renderMetrics();renderOverview(
 function renderRoomOptions(){
   const opts=state.rooms.map(r=>`<option value="${r.id}">${esc(r.nome)}</option>`).join('');
   $('inventory-room').innerHTML=state.rooms.length?'<option value="">Selecione</option>'+opts:'<option value="">Cadastre uma sala primeiro</option>';
+  $('order-room').innerHTML=state.rooms.length?'<option value="">Selecione a sala</option>'+opts:'<option value="">Cadastre uma sala primeiro</option>';
   const current=$('inventory-room-filter').value;$('inventory-room-filter').innerHTML='<option value="">Todas as salas</option>'+opts;$('inventory-room-filter').value=current;
 }
 function renderMetrics(){
@@ -98,7 +100,7 @@ function renderMetrics(){
   $('metric-rooms').textContent=state.rooms.length;$('metric-inventory').textContent=state.inventory.length;$('metric-inventory-units').textContent=`${inventoryQty} unidades físicas`;$('metric-orders').textContent=state.orders.length;$('metric-order-units').textContent=`${orderQty} unidades solicitadas`;
 }
 function renderOverview(){
-  $('overview-orders').innerHTML=state.orders.length?state.orders.slice(0,5).map(o=>`<div class="simple-row"><div><strong>${esc(o.item_nome)}</strong><small>${esc(o.categoria||'Sem categoria')}</small></div><b>${o.quantidade} ${esc(o.unidade_medida.toLowerCase())}</b></div>`).join(''):'Nenhum pedido ativo.';
+  $('overview-orders').innerHTML=state.orders.length?state.orders.slice(0,5).map(o=>`<div class="simple-row"><div><strong>${esc(o.item_nome)}</strong><small>${esc(o.categoria||'Sem categoria')} · ${esc(roomName(o.sala_id))}</small></div><b>${o.quantidade} ${esc(o.unidade_medida.toLowerCase())}</b></div>`).join(''):'Nenhum pedido ativo.';
   const counts=state.rooms.map(r=>({name:r.nome,count:state.inventory.filter(i=>i.sala_id===r.id).reduce((s,i)=>s+Number(i.quantidade),0)}));const max=Math.max(1,...counts.map(x=>x.count));
   $('overview-rooms').innerHTML=counts.length?counts.map(x=>`<div class="bar-row"><span>${esc(x.name)}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(x.count/max*100)}%"></div></div><b>${x.count}</b></div>`).join(''):'Nenhuma sala cadastrada.';
 }
@@ -106,36 +108,35 @@ function filteredInventory(){const room=$('inventory-room-filter').value,q=$('in
 function renderInventory(){
   const rows=filteredInventory();$('inventory-table').innerHTML=rows.length?rows.map(i=>`<tr><td><strong>${esc(i.item_nome)}</strong><small>${esc([i.marca,i.modelo].filter(Boolean).join(' · ')||i.categoria||'')}</small></td><td>${esc(state.rooms.find(r=>r.id===i.sala_id)?.nome||'—')}</td><td>${i.quantidade}</td><td>${esc(i.patrimonio||'—')}<small>${esc(i.numero_serie||'')}</small></td><td><span class="state-pill state-${i.estado}">${esc(i.estado)}</span></td><td>${fmtDate(i.atualizado_em)}</td><td><div class="row-actions"><button class="icon-btn" data-inventory-qty="${i.id}" data-delta="1" title="Aumentar quantidade">+</button><button class="icon-btn" data-inventory-qty="${i.id}" data-delta="-1" title="Diminuir quantidade">−</button><button class="icon-btn" data-inventory-remove="${i.id}" title="Retirar do inventário">Retirar</button></div></td></tr>`).join(''):'<tr><td colspan="7" class="empty-state">Nenhum item encontrado.</td></tr>';
 }
-function filteredOrders(){const q=$('order-search').value.trim().toLowerCase();return state.orders.filter(o=>!q||[o.item_nome,o.categoria,o.especificacao,o.justificativa].join(' ').toLowerCase().includes(q));}
+function filteredOrders(){const q=$('order-search').value.trim().toLowerCase();return state.orders.filter(o=>!q||[o.item_nome,o.categoria,o.especificacao,o.justificativa,roomName(o.sala_id)].join(' ').toLowerCase().includes(q));}
 function renderOrders(){
   const rows=filteredOrders(),qty=state.orders.reduce((s,o)=>s+Number(o.quantidade),0);$('cart-count').textContent=`${state.orders.length} ${state.orders.length===1?'item':'itens'}`;$('cart-total').textContent=`${qty} unidades solicitadas`;
-  $('orders-list').innerHTML=rows.length?rows.map(o=>`<article class="cart-item"><div class="cart-item-head"><div><h3>${esc(o.item_nome)}</h3><p>${esc(o.categoria||'Sem categoria')}</p></div><span class="priority-pill priority-${o.prioridade}">${esc(o.prioridade)}</span></div><div class="cart-meta"><span class="status-pill">${esc(o.unidade_medida)}</span>${o.especificacao?`<span class="status-pill">Com especificação</span>`:''}</div>${o.justificativa?`<p>${esc(o.justificativa)}</p>`:''}<div class="cart-footer"><div class="qty-control"><button data-order-qty="${o.id}" data-delta="-1">−</button><strong>${o.quantidade}</strong><button data-order-qty="${o.id}" data-delta="1">+</button></div><button class="text-button" data-order-cancel="${o.id}">Cancelar item</button></div></article>`).join(''):'<div class="panel empty-state">Sua lista de compras ainda está vazia.</div>';
+  $('orders-list').innerHTML=rows.length?rows.map(o=>`<article class="cart-item"><div class="cart-item-head"><div><h3>${esc(o.item_nome)}</h3><p>${esc(o.categoria||'Sem categoria')}</p></div><span class="priority-pill priority-${o.prioridade}">${esc(o.prioridade)}</span></div><div class="cart-meta"><span class="status-pill">${esc(roomName(o.sala_id))}</span><span class="status-pill">${esc(o.unidade_medida)}</span>${o.especificacao?`<span class="status-pill">Com especificação</span>`:''}</div>${o.justificativa?`<p>${esc(o.justificativa)}</p>`:''}<div class="cart-footer"><div class="qty-control"><button data-order-qty="${o.id}" data-delta="-1">−</button><strong>${o.quantidade}</strong><button data-order-qty="${o.id}" data-delta="1">+</button></div><button class="text-button" data-order-cancel="${o.id}">Cancelar item</button></div></article>`).join(''):'<div class="panel empty-state">Sua lista de compras ainda está vazia.</div>';
 }
 
 async function loadAdminData(){
-  const [accesses,profiles,orders,consolidated]=await Promise.all([
-    sb.from('portal_unidades_acessos').select('*').order('solicitado_em',{ascending:false}),
-    sb.from('profiles').select('id,nome,email'),
+  const [accesses,rooms,orders,consolidated]=await Promise.all([
+    sb.rpc('portal_listar_solicitacoes_acesso'),
+    sb.from('portal_salas').select('id,unidade_id,nome').eq('ativo',true).order('nome'),
     sb.from('portal_pedidos_itens').select('*').eq('status','ATIVO').order('unidade_id'),
     sb.from('portal_pedidos_consolidados').select('*').order('quantidade_total',{ascending:false})
   ]);
-  const error=accesses.error||profiles.error||orders.error||consolidated.error;if(error){toast(error.message,'error');return;}
-  state.approvals=accesses.data||[];state.profiles=profiles.data||[];state.adminOrders=orders.data||[];state.consolidated=consolidated.data||[];
+  const error=accesses.error||rooms.error||orders.error||consolidated.error;if(error){toast(error.message,'error');return;}
+  state.approvals=accesses.data||[];state.adminRooms=rooms.data||[];state.adminOrders=orders.data||[];state.consolidated=consolidated.data||[];
   renderAdmin();
 }
-function profileFor(id){return state.profiles.find(p=>p.id===id)||{};}
 function renderAdmin(){renderAdminOverview();renderApprovals();}
 function renderAdminOverview(){
   const q=$('admin-search').value.trim().toLowerCase(),unit=$('admin-unit-filter').value;
   let cons=state.consolidated;if(q)cons=cons.filter(i=>[i.item_nome,i.categoria].join(' ').toLowerCase().includes(q));
   $('consolidated-table').innerHTML=cons.length?cons.map(i=>`<tr><td><strong>${esc(i.item_nome)}</strong></td><td>${esc(i.categoria||'—')}</td><td><strong>${i.quantidade_total} ${esc(i.unidade_medida.toLowerCase())}</strong></td><td>${i.total_unidades}</td><td>${fmtDate(i.atualizado_em)}</td></tr>`).join(''):'<tr><td colspan="5" class="empty-state">Nenhum pedido ativo.</td></tr>';
   const orders=state.adminOrders.filter(o=>!unit||String(o.unidade_id)===unit);const groups={};orders.forEach(o=>(groups[o.unidade_id]??=[]).push(o));
-  $('admin-orders-by-unit').innerHTML=Object.keys(groups).length?Object.entries(groups).sort((a,b)=>unitName(a[0]).localeCompare(unitName(b[0]),'pt-BR')).map(([id,items])=>`<details class="unit-group"><summary class="unit-group-head"><strong>${esc(unitName(id))}</strong><span>${items.length} ${items.length===1?'item':'itens'} · ${items.reduce((s,i)=>s+Number(i.quantidade),0)} unidades</span></summary><div class="unit-group-body">${items.map(i=>`<div class="simple-row"><div><strong>${esc(i.item_nome)}</strong><small>${esc(i.categoria||'Sem categoria')} · ${esc(i.prioridade)}</small></div><div><b>${i.quantidade} ${esc(i.unidade_medida.toLowerCase())}</b> <button class="icon-btn" data-order-attend="${i.id}">Marcar atendido</button></div></div>`).join('')}</div></details>`).join(''):'<div class="panel empty-state">Nenhum pedido para o filtro selecionado.</div>';
+  $('admin-orders-by-unit').innerHTML=Object.keys(groups).length?Object.entries(groups).sort((a,b)=>unitName(a[0]).localeCompare(unitName(b[0]),'pt-BR')).map(([id,items])=>`<article class="unit-group"><div class="unit-group-head"><strong>${esc(unitName(id))}</strong><span>${items.length} ${items.length===1?'item':'itens'} · ${items.reduce((s,i)=>s+Number(i.quantidade),0)} unidades</span></div><div class="unit-group-body">${items.map(i=>`<div class="simple-row"><div><strong>${esc(i.item_nome)}</strong><small>${esc(i.categoria||'Sem categoria')} · ${esc(i.prioridade)} · ${esc(roomName(i.sala_id,state.adminRooms))}</small></div><div><b>${i.quantidade} ${esc(i.unidade_medida.toLowerCase())}</b> <button class="icon-btn" data-order-attend="${i.id}">Marcar atendido</button></div></div>`).join('')}</div></article>`).join(''):'<div class="panel empty-state">Nenhum pedido para o filtro selecionado.</div>';
   if(!state.unitId){$('metric-rooms').textContent='—';$('metric-inventory').textContent='—';$('metric-orders').textContent=state.adminOrders.length;$('metric-order-units').textContent=`${state.adminOrders.reduce((s,i)=>s+Number(i.quantidade),0)} unidades solicitadas`;$('overview-orders').innerHTML='Use a aba Consolidado para acompanhar todas as unidades.';$('overview-rooms').innerHTML='Visão administrativa ativa.';}
 }
 function renderApprovals(){
   const pending=state.approvals.filter(a=>a.status==='PENDENTE');$('approval-badge').textContent=pending.length;
-  $('approvals-list').innerHTML=state.approvals.length?state.approvals.map(a=>{const p=profileFor(a.user_id);return`<article class="approval-card"><div><h3>${esc(p.nome||'Usuário')}</h3><p>${esc(p.email||'E-mail não disponível')} · solicitado em ${fmtDate(a.solicitado_em)}</p></div><div><span class="status-pill">${esc(unitName(a.unidade_solicitada_id))}</span><p>Status: ${esc(a.status)}</p></div><div class="approval-actions">${a.status==='PENDENTE'?`<button class="btn btn-primary" data-approve="${a.user_id}">Aprovar</button><button class="btn btn-danger" data-reject="${a.user_id}">Rejeitar</button>`:`<span class="state-pill ${a.status==='APROVADO'?'state-BOM':'state-RUIM'}">${esc(a.status)}</span>`}</div></article>`}).join(''):'<div class="panel empty-state">Nenhuma solicitação de acesso.</div>';
+  $('approvals-list').innerHTML=state.approvals.length?state.approvals.map(a=>`<article class="approval-card"><div><h3>${esc(a.nome||'Usuário')}</h3><p>${esc(a.email||'E-mail não disponível')} · solicitado em ${fmtDate(a.solicitado_em)}</p></div><div><span class="status-pill">${esc(unitName(a.unidade_solicitada_id))}</span><p>Status: ${esc(a.status)}</p></div><div class="approval-actions">${a.status==='PENDENTE'?`<button class="btn btn-primary" data-approve="${a.user_id}">Aprovar</button><button class="btn btn-danger" data-reject="${a.user_id}">Rejeitar</button>`:`<span class="state-pill ${a.status==='APROVADO'?'state-BOM':'state-RUIM'}">${esc(a.status)}</span>`}</div></article>`).join(''):'<div class="panel empty-state">Nenhuma solicitação de acesso.</div>';
 }
 
 function updateExportSelectedCount(){
@@ -148,7 +149,7 @@ function renderExportUnits(){
   updateExportSelectedCount();
 }
 function openExportModal(){
-  if(!state.isAdmin)return;if(!state.exportUnitIds.size&&state.unitId)state.exportUnitIds.add(String(state.unitId));
+  if(!state.isPortalManager)return;if(!state.exportUnitIds.size&&state.unitId)state.exportUnitIds.add(String(state.unitId));
   $('export-unit-search').value='';renderExportUnits();$('export-modal').hidden=false;document.body.style.overflow='hidden';setTimeout(()=>$('export-unit-search').focus(),0);
 }
 function closeExportModal(){$('export-modal').hidden=true;document.body.style.overflow='';}
@@ -206,31 +207,31 @@ function makeConsolidatedOrdersSheet(orders){
   }));
   return makeDataSheet(rows,['Item','Categoria','Quantidade total','Unidade de medida','Maior prioridade'],[36,24,18,20,18]);
 }
-function makeOrdersByUnitSheet(selectedUnits,orders){
+function makeOrdersByUnitSheet(selectedUnits,orders,roomNames){
   const unitsById=new Map(selectedUnits.map(unit=>[String(unit.id),unit.nome]));
   const rows=orders.filter(order=>order.status==='ATIVO').map(order=>({
-    'Unidade':unitsById.get(String(order.unidade_id))||'Unidade não identificada','Item':order.item_nome,'Categoria':order.categoria||'','Quantidade':Number(order.quantidade||0),'Unidade de medida':order.unidade_medida||'','Prioridade':order.prioridade||'','Especificação':order.especificacao||'','Justificativa':order.justificativa||'','Solicitado em':exportDate(order.criado_em),'Atualizado em':exportDate(order.atualizado_em)
+    'Unidade':unitsById.get(String(order.unidade_id))||'Unidade não identificada','Sala':roomNames.get(order.sala_id)||'Não informada (pedido anterior)','Item':order.item_nome,'Categoria':order.categoria||'','Quantidade':Number(order.quantidade||0),'Unidade de medida':order.unidade_medida||'','Prioridade':order.prioridade||'','Especificação':order.especificacao||'','Justificativa':order.justificativa||'','Solicitado em':exportDate(order.criado_em),'Atualizado em':exportDate(order.atualizado_em)
   })).sort((a,b)=>a.Unidade.localeCompare(b.Unidade,'pt-BR')||a.Item.localeCompare(b.Item,'pt-BR'));
-  return makeDataSheet(rows,['Unidade','Item','Categoria','Quantidade','Unidade de medida','Prioridade','Especificação','Justificativa','Solicitado em','Atualizado em'],[30,36,22,14,20,16,48,48,20,20],['Solicitado em','Atualizado em']);
+  return makeDataSheet(rows,['Unidade','Sala','Item','Categoria','Quantidade','Unidade de medida','Prioridade','Especificação','Justificativa','Solicitado em','Atualizado em'],[30,24,36,22,14,20,16,48,48,20,20],['Solicitado em','Atualizado em']);
 }
 async function downloadAdminExport(){
-  if(!state.isAdmin)return toast('Somente administradores podem exportar os dados.','error');
+  if(!state.isPortalManager)return toast('Somente gestores do Portal Unidades podem exportar os dados.','error');
   const unitIds=[...state.exportUnitIds].map(Number),includeInventory=$('export-inventory').checked,includeOrders=$('export-orders').checked;
   if(!unitIds.length)return toast('Selecione pelo menos uma unidade.','error');if(!includeInventory&&!includeOrders)return toast('Escolha inventário, pedidos de compra ou ambos.','error');if(!window.XLSX)return toast('O gerador de Excel não foi carregado. Atualize a página e tente novamente.','error');
   const button=$('download-export'),original=button.textContent;button.disabled=true;button.textContent='Preparando arquivo...';
   try{
     const [rooms,inventory,orders]=await Promise.all([
-      includeInventory?fetchExportRows('portal_salas','id,unidade_id,nome,descricao,criado_em,atualizado_em',unitIds,{sortField:'nome'}):[],
+      includeInventory||includeOrders?fetchExportRows('portal_salas','id,unidade_id,nome,descricao,criado_em,atualizado_em',unitIds,{sortField:'nome'}):[],
       includeInventory?fetchExportRows('portal_inventario','id,unidade_id,sala_id,item_nome,categoria,quantidade,patrimonio,numero_serie,marca,modelo,estado,observacoes,criado_em,atualizado_em',unitIds,{activeOnly:true}):[],
-      includeOrders?fetchExportRows('portal_pedidos_itens','id,unidade_id,item_nome,categoria,quantidade,unidade_medida,especificacao,justificativa,prioridade,status,criado_em,atualizado_em,cancelado_em,atendido_em',unitIds):[]
+      includeOrders?fetchExportRows('portal_pedidos_itens','id,unidade_id,sala_id,item_nome,categoria,quantidade,unidade_medida,especificacao,justificativa,prioridade,status,criado_em,atualizado_em,cancelado_em,atendido_em',unitIds):[]
     ]);
     const selectedUnits=state.units.filter(u=>state.exportUnitIds.has(String(u.id))).sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR')),roomNames=new Map(rooms.map(r=>[r.id,r.nome])),wb=XLSX.utils.book_new(),usedNames=new Set();
     wb.Props={Title:'Portal Unidades — Inventários e pedidos de compra',Subject:'Exportação administrativa por unidade',Author:state.profile?.nome||'Portal Unidades',CreatedDate:new Date()};
-    if(includeOrders){XLSX.utils.book_append_sheet(wb,makeConsolidatedOrdersSheet(orders),'Pedidos consolidados');usedNames.add('Pedidos consolidados');XLSX.utils.book_append_sheet(wb,makeOrdersByUnitSheet(selectedUnits,orders),'Pedidos por unidade');usedNames.add('Pedidos por unidade');}
+    if(includeOrders){XLSX.utils.book_append_sheet(wb,makeConsolidatedOrdersSheet(orders),'Pedidos consolidados');usedNames.add('Pedidos consolidados');XLSX.utils.book_append_sheet(wb,makeOrdersByUnitSheet(selectedUnits,orders,roomNames),'Pedidos por unidade');usedNames.add('Pedidos por unidade');}
     XLSX.utils.book_append_sheet(wb,makeSummarySheet(selectedUnits,rooms,inventory,orders,includeInventory,includeOrders),'Resumo');usedNames.add('Resumo');
     for(const unit of selectedUnits){
       if(includeInventory){const rows=inventory.filter(i=>String(i.unidade_id)===String(unit.id)).map(i=>({'Unidade':unit.nome,'Sala':roomNames.get(i.sala_id)||'Não identificada','Item':i.item_nome,'Categoria':i.categoria||'','Quantidade':Number(i.quantidade||0),'Patrimônio':i.patrimonio||'','Número de série':i.numero_serie||'','Marca':i.marca||'','Modelo':i.modelo||'','Estado':i.estado,'Observações':i.observacoes||'','Cadastrado em':exportDate(i.criado_em),'Atualizado em':exportDate(i.atualizado_em)})),headers=['Unidade','Sala','Item','Categoria','Quantidade','Patrimônio','Número de série','Marca','Modelo','Estado','Observações','Cadastrado em','Atualizado em'];XLSX.utils.book_append_sheet(wb,makeDataSheet(rows,headers,[28,24,30,20,12,18,20,18,20,14,42,20,20],['Cadastrado em','Atualizado em']),uniqueSheetName('INV',unit.nome,usedNames));}
-      if(includeOrders){const rows=orders.filter(o=>String(o.unidade_id)===String(unit.id)).map(o=>({'Unidade':unit.nome,'Item':o.item_nome,'Categoria':o.categoria||'','Quantidade':Number(o.quantidade||0),'Unidade de medida':o.unidade_medida,'Prioridade':o.prioridade,'Status':o.status,'Especificação':o.especificacao||'','Justificativa':o.justificativa||'','Solicitado em':exportDate(o.criado_em),'Atualizado em':exportDate(o.atualizado_em),'Cancelado em':exportDate(o.cancelado_em),'Atendido em':exportDate(o.atendido_em)})),headers=['Unidade','Item','Categoria','Quantidade','Unidade de medida','Prioridade','Status','Especificação','Justificativa','Solicitado em','Atualizado em','Cancelado em','Atendido em'];XLSX.utils.book_append_sheet(wb,makeDataSheet(rows,headers,[28,32,20,12,18,14,14,48,48,20,20,20,20],['Solicitado em','Atualizado em','Cancelado em','Atendido em']),uniqueSheetName('PED',unit.nome,usedNames));}
+      if(includeOrders){const rows=orders.filter(o=>String(o.unidade_id)===String(unit.id)).map(o=>({'Unidade':unit.nome,'Sala':roomNames.get(o.sala_id)||'Não informada (pedido anterior)','Item':o.item_nome,'Categoria':o.categoria||'','Quantidade':Number(o.quantidade||0),'Unidade de medida':o.unidade_medida,'Prioridade':o.prioridade,'Status':o.status,'Especificação':o.especificacao||'','Justificativa':o.justificativa||'','Solicitado em':exportDate(o.criado_em),'Atualizado em':exportDate(o.atualizado_em),'Cancelado em':exportDate(o.cancelado_em),'Atendido em':exportDate(o.atendido_em)})),headers=['Unidade','Sala','Item','Categoria','Quantidade','Unidade de medida','Prioridade','Status','Especificação','Justificativa','Solicitado em','Atualizado em','Cancelado em','Atendido em'];XLSX.utils.book_append_sheet(wb,makeDataSheet(rows,headers,[28,24,32,20,12,18,14,14,48,48,20,20,20,20],['Solicitado em','Atualizado em','Cancelado em','Atendido em']),uniqueSheetName('PED',unit.nome,usedNames));}
     }
     const now=new Date(),stamp=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}`;XLSX.writeFile(wb,`portal-unidades_${stamp}.xlsx`,{compression:true,cellDates:true});toast('Arquivo Excel gerado com sucesso.');closeExportModal();
   }catch(error){console.error(error);toast(`Não foi possível gerar o arquivo: ${error.message||'erro inesperado'}`,'error');}
@@ -239,9 +240,9 @@ async function downloadAdminExport(){
 
 async function submitRoom(e){e.preventDefault();setBusy(e.currentTarget,true,'Salvando...');const {error}=await sb.from('portal_salas').insert({unidade_id:state.unitId,nome:$('room-name').value.trim(),descricao:$('room-description').value.trim()||null,criado_por:state.user.id});setBusy(e.currentTarget,false);if(error)return toast(error.message,'error');e.currentTarget.reset();toggleForm('room-form',false);toast('Sala cadastrada.');await loadCoordinatorData();}
 async function submitInventory(e){e.preventDefault();if(!state.rooms.length)return toast('Cadastre uma sala primeiro.','error');setBusy(e.currentTarget,true,'Salvando...');const payload={unidade_id:state.unitId,sala_id:$('inventory-room').value,item_nome:$('inventory-name').value.trim(),categoria:$('inventory-category').value.trim()||null,quantidade:Number($('inventory-quantity').value),patrimonio:$('inventory-asset').value.trim()||null,numero_serie:$('inventory-serial').value.trim()||null,marca:$('inventory-brand').value.trim()||null,modelo:$('inventory-model').value.trim()||null,estado:$('inventory-state').value,observacoes:$('inventory-notes').value.trim()||null,criado_por:state.user.id,atualizado_por:state.user.id};const {error}=await sb.from('portal_inventario').insert(payload);setBusy(e.currentTarget,false);if(error)return toast(error.message,'error');e.currentTarget.reset();$('inventory-quantity').value=1;toggleForm('inventory-form',false);toast('Item incluído no inventário.');await loadCoordinatorData();}
-async function submitOrder(e){e.preventDefault();setBusy(e.currentTarget,true,'Adicionando...');const payload={unidade_id:state.unitId,item_nome:$('order-name').value.trim(),categoria:$('order-category').value.trim()||null,quantidade:Number($('order-quantity').value),unidade_medida:$('order-unit').value,prioridade:$('order-priority').value,especificacao:$('order-spec').value.trim()||null,justificativa:$('order-justification').value.trim()||null,criado_por:state.user.id,atualizado_por:state.user.id};const {error}=await sb.from('portal_pedidos_itens').insert(payload);setBusy(e.currentTarget,false);if(error)return toast(error.message,'error');e.currentTarget.reset();$('order-quantity').value=1;toggleForm('order-form',false);toast('Item adicionado à lista de compras.');await loadCoordinatorData();}
+async function submitOrder(e){e.preventDefault();if(!state.rooms.length)return toast('Cadastre uma sala antes de solicitar um item.','error');setBusy(e.currentTarget,true,'Adicionando...');const payload={unidade_id:state.unitId,sala_id:$('order-room').value,item_nome:$('order-name').value.trim(),categoria:$('order-category').value.trim()||null,quantidade:Number($('order-quantity').value),unidade_medida:$('order-unit').value,prioridade:$('order-priority').value,especificacao:$('order-spec').value.trim()||null,justificativa:$('order-justification').value.trim()||null,criado_por:state.user.id,atualizado_por:state.user.id};const {error}=await sb.from('portal_pedidos_itens').insert(payload);setBusy(e.currentTarget,false);if(error)return toast(error.message,'error');e.currentTarget.reset();$('order-quantity').value=1;toggleForm('order-form',false);toast('Item adicionado à lista de compras.');await loadCoordinatorData();}
 async function changeQty(table,id,delta){const list=table==='portal_inventario'?state.inventory:state.orders,row=list.find(x=>x.id===id);if(!row)return;const next=Number(row.quantidade)+Number(delta);if(next<1)return toast('A quantidade mínima é 1.','error');const {error}=await sb.from(table).update({quantidade:next}).eq('id',id);if(error)return toast(error.message,'error');await loadCoordinatorData();}
-async function updateItem(table,id,patch,message){const {error}=await sb.from(table).update(patch).eq('id',id);if(error)return toast(error.message,'error');toast(message);state.isAdmin&&!state.unitId?await loadAdminData():await loadCoordinatorData();}
+async function updateItem(table,id,patch,message){const {error}=await sb.from(table).update(patch).eq('id',id);if(error)return toast(error.message,'error');toast(message);state.isPortalManager&&!state.unitId?await loadAdminData():await loadCoordinatorData();}
 async function reviewAccess(id,status){
   const row=state.approvals.find(a=>a.user_id===id);if(!row)return;
   const {error}=await sb.from('portal_unidades_acessos').update({status,unidade_id:status==='APROVADO'?row.unidade_solicitada_id:null}).eq('user_id',id);
@@ -253,7 +254,7 @@ function resetRealtime(){if(state.channel){sb.removeChannel(state.channel);state
 function subscribeRealtime(){
   resetRealtime();if(!state.user)return;state.channel=sb.channel(`portal-${state.user.id}`).on('postgres_changes',{event:'*',schema:'public',table:'portal_unidades_acessos'},scheduleReload).on('postgres_changes',{event:'*',schema:'public',table:'portal_salas'},scheduleReload).on('postgres_changes',{event:'*',schema:'public',table:'portal_inventario'},scheduleReload).on('postgres_changes',{event:'*',schema:'public',table:'portal_pedidos_itens'},scheduleReload).subscribe();
 }
-function scheduleReload(){clearTimeout(reloadTimer);reloadTimer=setTimeout(()=>state.isAdmin?(state.unitId?loadCoordinatorData():loadAdminData()):state.access?.status==='APROVADO'?loadCoordinatorData():routeSession(state.session),350);}
+function scheduleReload(){clearTimeout(reloadTimer);reloadTimer=setTimeout(()=>state.isPortalManager?(state.unitId?loadCoordinatorData():loadAdminData()):state.access?.status==='APROVADO'?loadCoordinatorData():routeSession(state.session),350);}
 
 document.addEventListener('DOMContentLoaded',async()=>{
   await loadUnits();
@@ -261,7 +262,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
   $('login-form').onsubmit=async e=>{e.preventDefault();setBusy(e.currentTarget,true,'Entrando...');const {data,error}=await sb.auth.signInWithPassword({email:$('login-email').value.trim(),password:$('login-password').value});setBusy(e.currentTarget,false);if(error)return toast('E-mail ou senha inválidos.','error');await routeSession(data.session)};
   $('register-form').onsubmit=async e=>{e.preventDefault();if($('register-password').value!==$('register-password-confirm').value)return toast('As senhas não conferem.','error');setBusy(e.currentTarget,true,'Enviando...');const {error}=await sb.auth.signUp({email:$('register-email').value.trim(),password:$('register-password').value,options:{emailRedirectTo:new URL('index.html',location.href).href,data:{portal_unidades:'true',nome:$('register-name').value.trim(),unidade_id:$('register-unit').value}}});setBusy(e.currentTarget,false);if(error)return toast(error.message,'error');toast('Solicitação criada. Confira seu e-mail e aguarde a aprovação.');$('register-view').hidden=true;$('login-view').hidden=false;e.currentTarget.reset()};
   $('signout').onclick=$('pending-signout').onclick=async()=>{await sb.auth.signOut();showOnly('auth-screen')};$('pending-refresh').onclick=async()=>{const {data}=await sb.auth.getSession();await routeSession(data.session)};
-  document.querySelectorAll('.nav-item').forEach(b=>b.onclick=async()=>{if(state.isAdmin&&['admin','approvals'].includes(b.dataset.tab))await loadAdminData();openTab(b.dataset.tab)});document.querySelectorAll('[data-goto]').forEach(b=>b.onclick=()=>openTab(b.dataset.goto));
+  document.querySelectorAll('.nav-item').forEach(b=>b.onclick=async()=>{if(state.isPortalManager&&['admin','approvals'].includes(b.dataset.tab))await loadAdminData();openTab(b.dataset.tab)});document.querySelectorAll('[data-goto]').forEach(b=>b.onclick=()=>openTab(b.dataset.goto));
   $('toggle-room-form').onclick=()=>toggleForm('room-form');$('toggle-inventory-form').onclick=()=>toggleForm('inventory-form');$('toggle-order-form').onclick=()=>toggleForm('order-form');document.querySelectorAll('[data-close-form]').forEach(b=>b.onclick=()=>toggleForm(b.dataset.closeForm,false));
   $('room-form').onsubmit=submitRoom;$('inventory-form').onsubmit=submitInventory;$('order-form').onsubmit=submitOrder;
   $('inventory-room-filter').onchange=renderInventory;$('inventory-search').oninput=renderInventory;$('order-search').oninput=renderOrders;$('admin-search').oninput=renderAdminOverview;$('admin-unit-filter').onchange=renderAdminOverview;

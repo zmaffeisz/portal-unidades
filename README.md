@@ -7,8 +7,10 @@ Portal separado para coordenadores das unidades de saúde, conectado ao mesmo Su
 - Cadastro com escolha da unidade e aprovação obrigatória por administrador.
 - Coordenador vê somente a unidade aprovada.
 - Inventário organizado por salas.
-- Lista permanente de pedidos de compra, com inclusão, ajuste de quantidade e cancelamento.
+- Lista permanente de pedidos de compra por sala, com inclusão, ajuste de quantidade e cancelamento.
 - Administrador vê solicitações de acesso, pedidos consolidados e pedidos por unidade.
+- Usuários aprovados definidos como **Divisão** no Dashboard têm, somente neste portal,
+  a mesma visão e as mesmas ações do administrador, sem receber o papel global de admin.
 - Atualizações em tempo real via Supabase Realtime.
 
 ## Ambiente

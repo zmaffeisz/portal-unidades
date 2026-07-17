@@ -2,6 +2,10 @@
 
 ## 2026-07-17
 
+- Pedidos de compra novos agora exigem a seleção de uma sala ativa da própria unidade; pedidos anteriores permanecem identificados como sem sala até classificação manual.
+- A sala do pedido passou a aparecer nas listas por unidade e nas exportações administrativas.
+- Perfis aprovados definidos como **Divisão** no Dashboard agora administram o Portal Unidades com a mesma visão e as mesmas ações do administrador, sem receber o papel global de admin.
+- A listagem de solicitações passou a expor aos gestores somente os dados mínimos necessários para a aprovação, por uma função protegida no banco.
 - Administradores agora podem selecionar uma unidade no cabeçalho e atuar nela com as mesmas funções do coordenador.
 - A visão por unidade permite cadastrar salas, incluir e atualizar inventário e manter pedidos de compra.
 - A opção "Administração geral" retorna ao consolidado e às aprovações de acesso.
