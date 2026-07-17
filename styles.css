@@ -20,3 +20,30 @@
 
 /* Pedidos não usam categoria nem especificação; esconde apenas dados antigos já salvos. */
 .cart-item-head p,.cart-item .cart-meta .status-pill:nth-child(3){display:none}
+
+#orders-list{display:block}
+.orders-summary{margin-bottom:28px;padding:22px;background:#fff;border:1px solid var(--line);border-radius:16px}
+.orders-summary-head,.orders-by-room-title{display:flex;align-items:end;justify-content:space-between;gap:16px;margin-bottom:16px}
+.orders-summary-head h2,.orders-by-room-title h2{margin:0;font-size:20px}
+.orders-summary-head>span{color:var(--muted);font-size:12px}
+.orders-summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px 24px}
+.order-summary-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:11px 0;border-top:1px solid var(--line)}
+.order-summary-row strong,.room-order-item strong{display:block;font-size:13px}
+.order-summary-row small,.room-order-summary small,.room-order-item small{display:block;margin-top:3px;color:var(--muted);font-size:11px}
+.orders-by-room{display:grid;gap:12px}
+.orders-by-room-title{margin:0 0 2px}
+.room-order-card{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.room-order-summary{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:17px 20px;background:#f0f5f7;cursor:pointer;list-style:none}
+.room-order-summary::-webkit-details-marker{display:none}
+.room-order-summary::before{content:'›';display:grid;place-items:center;width:22px;height:22px;margin-right:1px;border:1px solid var(--line);border-radius:50%;background:#fff;color:var(--teal);font-size:19px;line-height:1;transition:transform .15s}
+.room-order-card[open] .room-order-summary::before{transform:rotate(90deg)}
+.room-order-summary>span{display:flex;align-items:center;gap:12px;margin-right:auto}
+.room-order-summary>span strong{font-size:14px}
+.room-order-summary>b{color:var(--navy);font-size:12px;white-space:nowrap}
+.room-order-body{padding:4px 20px}
+.room-order-item{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:15px 0;border-top:1px solid var(--line)}
+.room-order-item:first-child{border-top:0}
+.room-order-item-main{min-width:0}
+.room-order-item-main p{margin:7px 0 0;color:var(--muted);font-size:12px;line-height:1.45}
+.room-order-item-actions{display:flex;align-items:center;gap:18px;flex-wrap:wrap;justify-content:flex-end}
+@media(max-width:700px){.room-order-item{align-items:flex-start;flex-direction:column}.room-order-item-actions{width:100%;justify-content:space-between}.room-order-summary{padding:15px}.orders-summary{padding:18px}}
