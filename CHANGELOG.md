@@ -18,6 +18,7 @@
 - Os botões de adicionar inventário e pedido foram movidos para dentro dos cards de sala; ao abrir o formulário, a sala escolhida fica vinculada e bloqueada.
 - O Consolidado administrativo agora tem sub-abas de Pedidos e Inventários; o inventário administrativo segue a hierarquia recolhível Unidade → Sala → Itens.
 - A navegação administrativa agora apresenta essa tela como Visão geral; a antiga Visão geral foi retirada da navegação.
+- O resumo geral de pedidos na Visão geral administrativa agora começa recolhido, podendo ser expandido quando necessário.
 - O formulário de pedidos não exibe mais Categoria ou Especificação; sala, item, quantidade, unidade de medida, prioridade e justificativa são obrigatórios.
 
 ## 2026-07-16
