@@ -1,5 +1,7 @@
 # Changelog
 
+- Navegação: ícone de carrinho de compras na aba Pedidos de compra.
+
 - Pedidos de compra: resumo inicial recolhido e itens organizados em lista delimitada.
 
 ## 2026-07-17
