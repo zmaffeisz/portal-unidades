@@ -14,6 +14,7 @@
 - A exportação de pedidos começa por uma aba consolidada dos itens ativos, com as quantidades somadas e sem identificar as unidades.
 - A segunda aba detalha os pedidos ativos por unidade; as abas individuais mantêm também o histórico de atendidos e cancelados.
 - O detalhamento de pedidos por unidade agora começa recolhido: a administração vê as UBS e seus totais, expandindo cada uma apenas quando precisar consultar ou atender os itens.
+- O formulário de pedidos não exibe mais Categoria ou Especificação; sala, item, quantidade, unidade de medida, prioridade e justificativa são obrigatórios.
 
 ## 2026-07-16
 

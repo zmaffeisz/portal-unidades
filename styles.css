@@ -17,3 +17,6 @@
 .unit-group[open] .unit-group-head::before{transform:rotate(90deg)}
 .unit-group-head strong{margin-right:auto}
 .unit-group-head span{color:var(--muted);font-size:12px}
+
+/* Pedidos não usam categoria nem especificação; esconde apenas dados antigos já salvos. */
+.cart-item-head p,.cart-item .cart-meta .status-pill:nth-child(3){display:none}
