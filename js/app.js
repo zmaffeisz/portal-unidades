@@ -1,7 +1,7 @@
 const {createClient}=supabase;
 const sb=createClient(PORTAL_CONFIG.supabaseUrl,PORTAL_CONFIG.supabaseKey);
 
-const state={session:null,user:null,profile:null,access:null,isPortalManager:false,unitId:null,units:[],rooms:[],adminRooms:[],inventory:[],orders:[],adminOrders:[],consolidated:[],approvals:[],channel:null,tab:'overview',exportUnitIds:new Set()};
+const state={session:null,user:null,profile:null,access:null,isPortalManager:false,unitId:null,units:[],rooms:[],adminRooms:[],inventory:[],orders:[],adminOrders:[],adminInventory:[],consolidated:[],approvals:[],channel:null,tab:'overview',adminSubtab:'orders',exportUnitIds:new Set()};
 const $=id=>document.getElementById(id);
 const esc=v=>String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 const fmtDate=v=>v?new Date(v).toLocaleDateString('pt-BR'):'—';
@@ -139,17 +139,20 @@ function renderOrders(){
 }
 
 async function loadAdminData(){
-  const [accesses,rooms,orders,consolidated]=await Promise.all([
+  const [accesses,rooms,orders,inventory,consolidated]=await Promise.all([
     sb.rpc('portal_listar_solicitacoes_acesso'),
     sb.from('portal_salas').select('id,unidade_id,nome').eq('ativo',true).order('nome'),
     sb.from('portal_pedidos_itens').select('*').eq('status','ATIVO').order('unidade_id'),
+    sb.from('portal_inventario').select('*').eq('ativo',true).order('unidade_id'),
     sb.from('portal_pedidos_consolidados').select('*').order('quantidade_total',{ascending:false})
   ]);
-  const error=accesses.error||rooms.error||orders.error||consolidated.error;if(error){toast(error.message,'error');return;}
-  state.approvals=accesses.data||[];state.adminRooms=rooms.data||[];state.adminOrders=orders.data||[];state.consolidated=consolidated.data||[];
+  const error=accesses.error||rooms.error||orders.error||inventory.error||consolidated.error;if(error){toast(error.message,'error');return;}
+  state.approvals=accesses.data||[];state.adminRooms=rooms.data||[];state.adminOrders=orders.data||[];state.adminInventory=inventory.data||[];state.consolidated=consolidated.data||[];
   renderAdmin();
 }
-function renderAdmin(){renderAdminOverview();renderApprovals();}
+function switchAdminSubtab(name){state.adminSubtab=name;document.querySelectorAll('.admin-subtab').forEach(b=>{const active=b.dataset.adminSubtab===name;b.classList.toggle('active',active);b.setAttribute('aria-selected',String(active));});document.querySelectorAll('#tab-admin > .page-heading,#tab-admin > .toolbar,#tab-admin > .table-wrap,#tab-admin > .section-title,#admin-orders-by-unit').forEach(el=>{el.hidden=name!=='orders';});$('admin-subtab-inventory').hidden=name!=='inventory';if(name==='inventory')renderAdminInventory();}
+function renderAdminInventory(){const q=$('admin-inventory-search')?.value.trim().toLowerCase()||'',items=state.adminInventory.filter(i=>!q||[i.item_nome,i.patrimonio,i.numero_serie,i.marca,i.modelo,roomName(i.sala_id,state.adminRooms),unitName(i.unidade_id)].join(' ').toLowerCase().includes(q));$('admin-inventory-by-unit').innerHTML=state.units.map(unit=>{const unitItems=items.filter(i=>String(i.unidade_id)===String(unit.id)),rooms=new Map();unitItems.forEach(i=>{const key=String(i.sala_id||'sem-sala'),room=rooms.get(key)||{nome:roomName(i.sala_id,state.adminRooms),items:[],quantidade:0};room.items.push(i);room.quantidade+=Number(i.quantidade||0);rooms.set(key,room);});const total=unitItems.reduce((s,i)=>s+Number(i.quantidade||0),0);return`<details class="admin-inventory-unit"><summary class="admin-inventory-unit-summary"><span><strong>${esc(unit.nome)}</strong><small>${unitItems.length} ${unitItems.length===1?'item':'itens'} cadastrados</small></span><b>${total} unidades</b></summary><div class="admin-inventory-unit-body">${rooms.size?[...rooms.values()].sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR')).map(room=>`<details class="admin-inventory-room"><summary class="admin-inventory-room-summary"><span><strong>${esc(room.nome)}</strong><small>${room.items.length} ${room.items.length===1?'item':'itens'}</small></span><b>${room.quantidade} unidades</b></summary><div class="admin-inventory-room-body">${room.items.map(i=>`<div class="admin-inventory-item"><div><strong>${esc(i.item_nome)}</strong><small>${esc([i.marca,i.modelo].filter(Boolean).join(' · ')||'Sem marca ou modelo')}</small>${i.patrimonio||i.numero_serie?`<p>${i.patrimonio?`Patrimônio: ${esc(i.patrimonio)}`:''}${i.patrimonio&&i.numero_serie?' · ':''}${i.numero_serie?`Série: ${esc(i.numero_serie)}`:''}</p>`:''}</div><span class="state-pill state-${esc(i.estado)}">${esc(i.estado)}</span><b>${i.quantidade}</b></div>`).join('')}</div></details>`).join(''):'<div class="admin-inventory-empty">Nenhum item cadastrado.</div>'}</div></details>`;}).join('');}
+function renderAdmin(){renderAdminOverview();renderAdminInventory();renderApprovals();switchAdminSubtab(state.adminSubtab);}
 function renderAdminOverview(){
   const q=$('admin-search').value.trim().toLowerCase(),unit=$('admin-unit-filter').value;
   let cons=state.consolidated;if(q)cons=cons.filter(i=>[i.item_nome,i.categoria].join(' ').toLowerCase().includes(q));
@@ -292,6 +295,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
   $('toggle-room-form').onclick=()=>toggleForm('room-form');document.querySelectorAll('[data-close-form]').forEach(b=>b.onclick=()=>{if(b.dataset.closeForm==='inventory-form')$('inventory-room').disabled=false;if(b.dataset.closeForm==='order-form')$('order-room').disabled=false;toggleForm(b.dataset.closeForm,false)});
   $('room-form').onsubmit=submitRoom;$('inventory-form').onsubmit=submitInventory;$('order-form').onsubmit=submitOrder;
   $('inventory-room-filter').onchange=renderInventory;$('inventory-search').oninput=renderInventory;$('order-search').oninput=renderOrders;$('admin-search').oninput=renderAdminOverview;$('admin-unit-filter').onchange=renderAdminOverview;
+  document.querySelectorAll('.admin-subtab').forEach(b=>b.onclick=()=>switchAdminSubtab(b.dataset.adminSubtab));$('admin-inventory-search').oninput=renderAdminInventory;
   $('admin-unit-switch').onchange=e=>switchAdminUnit(e.target.value);
   $('open-export').onclick=openExportModal;$('close-export').onclick=closeExportModal;$('export-unit-search').oninput=renderExportUnits;$('export-select-all').onclick=()=>{state.units.forEach(u=>state.exportUnitIds.add(String(u.id)));renderExportUnits()};$('export-clear').onclick=()=>{state.exportUnitIds.clear();renderExportUnits()};$('export-unit-list').onchange=e=>{const input=e.target.closest('input[type="checkbox"]');if(!input)return;input.checked?state.exportUnitIds.add(input.value):state.exportUnitIds.delete(input.value);updateExportSelectedCount()};$('download-export').onclick=downloadAdminExport;$('export-modal').onclick=e=>{if(e.target===$('export-modal'))closeExportModal()};document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('export-modal').hidden)closeExportModal()});
   document.body.addEventListener('click',async e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.inventoryQty)await changeQty('portal_inventario',b.dataset.inventoryQty,b.dataset.delta);else if(b.dataset.inventoryRemove)await updateItem('portal_inventario',b.dataset.inventoryRemove,{ativo:false},'Item retirado do inventário.');else if(b.dataset.orderQty)await changeQty('portal_pedidos_itens',b.dataset.orderQty,b.dataset.delta);else if(b.dataset.orderCancel)await updateItem('portal_pedidos_itens',b.dataset.orderCancel,{status:'CANCELADO'},'Item cancelado.');else if(b.dataset.orderAttend)await updateItem('portal_pedidos_itens',b.dataset.orderAttend,{status:'ATENDIDO'},'Item marcado como atendido.');else if(b.dataset.approve)await reviewAccess(b.dataset.approve,'APROVADO');else if(b.dataset.reject)await reviewAccess(b.dataset.reject,'REJEITADO')});
