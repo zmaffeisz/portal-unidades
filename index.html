@@ -113,7 +113,7 @@
         </section>
 
         <section id="tab-inventory" class="tab-panel" hidden>
-          <div class="page-heading"><div><p class="eyebrow">Patrimônio da unidade</p><h1>Inventário por salas</h1><p class="muted">Cadastre os ambientes e mantenha a situação dos itens atualizada.</p></div><button class="btn btn-primary" id="toggle-inventory-form">+ Adicionar item</button></div>
+          <div class="page-heading"><div><p class="eyebrow">Patrimônio da unidade</p><h1>Inventário por salas</h1><p class="muted">Abra uma sala para consultar os itens ou adicionar um novo item nela.</p></div></div>
           <div class="toolbar"><select id="inventory-room-filter"><option value="">Todas as salas</option></select><input id="inventory-search" type="search" placeholder="Buscar item, patrimônio ou série"><button class="btn btn-secondary" id="toggle-room-form">+ Nova sala</button></div>
           <form id="room-form" class="inline-form" hidden><label>Nome da sala<input id="room-name" required placeholder="Ex.: Consultório 01"></label><label>Descrição<input id="room-description" placeholder="Opcional"></label><div class="form-actions"><button class="btn btn-primary" type="submit">Cadastrar sala</button><button class="btn btn-ghost" type="button" data-close-form="room-form">Cancelar</button></div></form>
           <form id="inventory-form" class="inline-form expanded" hidden>
@@ -123,7 +123,7 @@
         </section>
 
         <section id="tab-orders" class="tab-panel" hidden>
-          <div class="page-heading"><div><p class="eyebrow">Lista permanente</p><h1>Pedidos de compra</h1><p class="muted">Os itens permanecem aqui até serem cancelados ou atendidos.</p></div><button class="btn btn-primary" id="toggle-order-form">+ Adicionar pedido</button></div>
+          <div class="page-heading"><div><p class="eyebrow">Lista permanente</p><h1>Pedidos de compra</h1><p class="muted">Abra uma sala para consultar os pedidos ou adicionar um novo pedido nela.</p></div></div>
           <form id="order-form" class="inline-form expanded" hidden>
             <label>Sala que receberá o item<select id="order-room" required></select></label><label>Item desejado<input id="order-name" required placeholder="Ex.: Cadeira fixa sem braço"></label><label>Quantidade<input id="order-quantity" type="number" min="1" value="1" required></label><label>Unidade de medida<select id="order-unit" required><option value="">Selecione a unidade</option><option>UNIDADE</option><option>CAIXA</option><option>PACOTE</option><option>KIT</option><option>LITRO</option><option>METRO</option></select></label><label>Prioridade<select id="order-priority" required><option value="">Selecione a prioridade</option><option>BAIXA</option><option>NORMAL</option><option>ALTA</option><option>URGENTE</option></select></label><label class="span-2">Justificativa<textarea id="order-justification" rows="2" required placeholder="Por que a unidade precisa deste item?"></textarea></label><div class="form-actions span-2"><button class="btn btn-primary" type="submit">Adicionar à lista</button><button class="btn btn-ghost" type="button" data-close-form="order-form">Cancelar</button></div>
           </form>

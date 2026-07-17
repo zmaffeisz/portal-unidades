@@ -15,6 +15,7 @@
 - A segunda aba detalha os pedidos ativos por unidade; as abas individuais mantêm também o histórico de atendidos e cancelados.
 - O detalhamento de pedidos por unidade agora começa recolhido: a administração vê as UBS e seus totais, expandindo cada uma apenas quando precisar consultar ou atender os itens.
 - O inventário agora é exibido em cards expansíveis por sala, com quantidade total, itens, patrimônio, estado e ações preservadas.
+- Os botões de adicionar inventário e pedido foram movidos para dentro dos cards de sala; ao abrir o formulário, a sala escolhida fica vinculada e bloqueada.
 - O formulário de pedidos não exibe mais Categoria ou Especificação; sala, item, quantidade, unidade de medida, prioridade e justificativa são obrigatórios.
 
 ## 2026-07-16

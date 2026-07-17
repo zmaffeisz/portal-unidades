@@ -67,4 +67,5 @@
 .inventory-room-item-main p{margin:7px 0 0;color:var(--muted);font-size:11px}
 .inventory-room-actions{display:flex;align-items:center;gap:7px}
 .inventory-room-actions strong{min-width:24px;text-align:center}
+.room-add-action{display:flex;justify-content:flex-end;border-top:1px solid var(--line);padding:14px 0 10px}
 @media(max-width:700px){.inventory-room-summary{padding:15px}.inventory-room-item{grid-template-columns:1fr auto}.inventory-room-item>.state-pill{grid-column:2;grid-row:1}.inventory-room-actions{grid-column:1 / -1;justify-content:flex-end}}
