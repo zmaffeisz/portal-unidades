@@ -11,6 +11,7 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" defer></script>
   <script src="js/config.js" defer></script>
   <script src="js/app.js" defer></script>
 </head>
@@ -131,7 +132,7 @@
         </section>
 
         <section id="tab-admin" class="tab-panel" hidden>
-          <div class="page-heading"><div><p class="eyebrow">Planejamento de compras</p><h1>Pedidos consolidados</h1><p class="muted">Quantidade total solicitada e número de unidades interessadas.</p></div><span class="live-pill"><i></i>Atualização automática</span></div>
+          <div class="page-heading"><div><p class="eyebrow">Planejamento de compras</p><h1>Pedidos consolidados</h1><p class="muted">Quantidade total solicitada e número de unidades interessadas.</p></div><div class="heading-actions"><button class="btn btn-secondary" id="open-export" type="button">Baixar inventários e pedidos</button><span class="live-pill"><i></i>Atualização automática</span></div></div>
           <div class="toolbar"><input id="admin-search" type="search" placeholder="Buscar item consolidado"><select id="admin-unit-filter"><option value="">Todas as unidades</option></select></div>
           <div class="table-wrap"><table><thead><tr><th>Item</th><th>Categoria</th><th>Quantidade total</th><th>Unidades solicitantes</th><th>Última atualização</th></tr></thead><tbody id="consolidated-table"></tbody></table></div>
           <div class="section-title"><div><p class="eyebrow">Detalhamento</p><h2>Pedidos por unidade</h2></div></div>
@@ -144,6 +145,26 @@
         </section>
       </main>
     </div>
+  </div>
+
+  <div id="export-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="export-title" hidden>
+    <section class="modal-card export-card">
+      <div class="modal-head">
+        <div><p class="eyebrow">Exportação administrativa</p><h2 id="export-title">Baixar dados das unidades</h2><p class="muted">Selecione as unidades e o conteúdo que deseja incluir no arquivo Excel.</p></div>
+        <button class="modal-close" id="close-export" type="button" aria-label="Fechar">×</button>
+      </div>
+      <div class="export-options">
+        <label class="choice-card"><input id="export-inventory" type="checkbox" checked><span><b>Inventário completo</b><small>Salas, itens, quantidades, patrimônio, série e estado.</small></span></label>
+        <label class="choice-card"><input id="export-orders" type="checkbox" checked><span><b>Pedidos de compra</b><small>Itens ativos, atendidos e cancelados, com prioridade e justificativa.</small></span></label>
+      </div>
+      <div class="export-unit-head">
+        <div><b>Unidades</b><small id="export-selected-count">0 selecionadas</small></div>
+        <div class="export-selection-actions"><button class="text-button" id="export-select-all" type="button">Selecionar todas</button><button class="text-button muted-button" id="export-clear" type="button">Limpar</button></div>
+      </div>
+      <input id="export-unit-search" type="search" placeholder="Buscar unidade" aria-label="Buscar unidade para exportação">
+      <div id="export-unit-list" class="export-unit-list"></div>
+      <div class="modal-footer"><p>Será gerado um único arquivo com resumo e abas separadas por unidade.</p><button class="btn btn-primary" id="download-export" type="button">Baixar Excel</button></div>
+    </section>
   </div>
 </body>
 </html>

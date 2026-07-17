@@ -1,7 +1,7 @@
 const {createClient}=supabase;
 const sb=createClient(PORTAL_CONFIG.supabaseUrl,PORTAL_CONFIG.supabaseKey);
 
-const state={session:null,user:null,profile:null,access:null,isAdmin:false,unitId:null,units:[],rooms:[],inventory:[],orders:[],adminOrders:[],consolidated:[],approvals:[],profiles:[],channel:null,tab:'overview'};
+const state={session:null,user:null,profile:null,access:null,isAdmin:false,unitId:null,units:[],rooms:[],inventory:[],orders:[],adminOrders:[],consolidated:[],approvals:[],profiles:[],channel:null,tab:'overview',exportUnitIds:new Set()};
 const $=id=>document.getElementById(id);
 const esc=v=>String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 const fmtDate=v=>v?new Date(v).toLocaleDateString('pt-BR'):'—';
@@ -28,6 +28,7 @@ async function loadUnits(){
   $('register-unit').innerHTML=options;
   $('admin-unit-filter').innerHTML='<option value="">Todas as unidades</option>'+state.units.map(u=>`<option value="${u.id}">${esc(u.nome)}</option>`).join('');
   $('admin-unit-switch').innerHTML='<option value="">Administração geral</option>'+state.units.map(u=>`<option value="${u.id}">${esc(u.nome)}</option>`).join('');
+  renderExportUnits();
 }
 
 async function routeSession(session){
@@ -137,6 +138,84 @@ function renderApprovals(){
   $('approvals-list').innerHTML=state.approvals.length?state.approvals.map(a=>{const p=profileFor(a.user_id);return`<article class="approval-card"><div><h3>${esc(p.nome||'Usuário')}</h3><p>${esc(p.email||'E-mail não disponível')} · solicitado em ${fmtDate(a.solicitado_em)}</p></div><div><span class="status-pill">${esc(unitName(a.unidade_solicitada_id))}</span><p>Status: ${esc(a.status)}</p></div><div class="approval-actions">${a.status==='PENDENTE'?`<button class="btn btn-primary" data-approve="${a.user_id}">Aprovar</button><button class="btn btn-danger" data-reject="${a.user_id}">Rejeitar</button>`:`<span class="state-pill ${a.status==='APROVADO'?'state-BOM':'state-RUIM'}">${esc(a.status)}</span>`}</div></article>`}).join(''):'<div class="panel empty-state">Nenhuma solicitação de acesso.</div>';
 }
 
+function updateExportSelectedCount(){
+  const total=state.exportUnitIds.size;$('export-selected-count').textContent=`${total} ${total===1?'selecionada':'selecionadas'}`;
+}
+function renderExportUnits(){
+  const list=$('export-unit-list');if(!list)return;const q=$('export-unit-search')?.value.trim().toLowerCase()||'';
+  const units=state.units.filter(u=>!q||u.nome.toLowerCase().includes(q));
+  list.innerHTML=units.length?units.map(u=>`<label class="export-unit-option"><input type="checkbox" value="${u.id}" ${state.exportUnitIds.has(String(u.id))?'checked':''}><span>${esc(u.nome)}</span></label>`).join(''):'<div class="empty-state">Nenhuma unidade encontrada.</div>';
+  updateExportSelectedCount();
+}
+function openExportModal(){
+  if(!state.isAdmin)return;if(!state.exportUnitIds.size&&state.unitId)state.exportUnitIds.add(String(state.unitId));
+  $('export-unit-search').value='';renderExportUnits();$('export-modal').hidden=false;document.body.style.overflow='hidden';setTimeout(()=>$('export-unit-search').focus(),0);
+}
+function closeExportModal(){$('export-modal').hidden=true;document.body.style.overflow='';}
+async function fetchExportRows(table,columns,unitIds,{activeOnly=false,sortField='item_nome'}={}){
+  const pageSize=1000,rows=[];let from=0;
+  while(true){
+    let query=sb.from(table).select(columns).in('unidade_id',unitIds).order('unidade_id',{ascending:true}).order(sortField,{ascending:true}).range(from,from+pageSize-1);
+    if(activeOnly)query=query.eq('ativo',true);
+    const {data,error}=await query;if(error)throw error;rows.push(...(data||[]));if(!data||data.length<pageSize)break;from+=pageSize;
+  }
+  return rows;
+}
+function exportDate(value){return value?new Date(value):null;}
+function uniqueSheetName(prefix,unitNameValue,used){
+  const shortName=unitNameValue.replace(/^UBS\s+/i,'').replace(/[\\/?*\[\]:]/g,' ').replace(/\s+/g,' ').trim();let base=`${prefix} ${shortName}`.slice(0,31).trim(),name=base,n=2;
+  while(used.has(name)){const suffix=` ${n++}`;name=(base.slice(0,31-suffix.length)+suffix).trim();}used.add(name);return name;
+}
+function makeDataSheet(rows,headers,widths,dateHeaders=[]){
+  const ws=XLSX.utils.json_to_sheet(rows,{header:headers,cellDates:true,dateNF:'dd/mm/yyyy hh:mm'});ws['!cols']=widths.map(wch=>({wch}));
+  if(headers.length)ws['!autofilter']={ref:XLSX.utils.encode_range({s:{r:0,c:0},e:{r:Math.max(rows.length,1),c:headers.length-1}})};
+  dateHeaders.forEach(header=>{const col=headers.indexOf(header);if(col<0)return;for(let row=1;row<=rows.length;row++){const cell=ws[XLSX.utils.encode_cell({r:row,c:col})];if(cell)cell.z='dd/mm/yyyy hh:mm';}});
+  return ws;
+}
+function makeSummarySheet(selectedUnits,rooms,inventory,orders,includeInventory,includeOrders){
+  const summary=selectedUnits.map(unit=>{const unitRooms=rooms.filter(r=>String(r.unidade_id)===String(unit.id)),unitInventory=inventory.filter(i=>String(i.unidade_id)===String(unit.id)),unitOrders=orders.filter(o=>String(o.unidade_id)===String(unit.id)),activeOrders=unitOrders.filter(o=>o.status==='ATIVO');return{
+    'Unidade':unit.nome,
+    'Salas cadastradas':includeInventory?unitRooms.length:'—',
+    'Itens no inventário':includeInventory?unitInventory.length:'—',
+    'Unidades físicas':includeInventory?unitInventory.reduce((sum,item)=>sum+Number(item.quantidade||0),0):'—',
+    'Pedidos totais':includeOrders?unitOrders.length:'—',
+    'Pedidos ativos':includeOrders?activeOrders.length:'—',
+    'Unidades solicitadas ativas':includeOrders?activeOrders.reduce((sum,item)=>sum+Number(item.quantidade||0),0):'—',
+    'Pedidos atendidos':includeOrders?unitOrders.filter(o=>o.status==='ATENDIDO').length:'—',
+    'Pedidos cancelados':includeOrders?unitOrders.filter(o=>o.status==='CANCELADO').length:'—'
+  }});
+  const headers=Object.keys(summary[0]||{'Unidade':''}),ws=XLSX.utils.aoa_to_sheet([
+    ['PORTAL UNIDADES — EXPORTAÇÃO ADMINISTRATIVA'],
+    ['Gerado em',new Date()],
+    ['Conteúdo',[includeInventory?'Inventário':null,includeOrders?'Pedidos de compra':null].filter(Boolean).join(' e ')],
+    ['Unidades selecionadas',selectedUnits.length]
+  ],{cellDates:true,dateNF:'dd/mm/yyyy hh:mm'});
+  ws['!merges']=[XLSX.utils.decode_range(`A1:${XLSX.utils.encode_col(Math.max(headers.length-1,0))}1`)];XLSX.utils.sheet_add_json(ws,summary,{origin:'A6',header:headers,skipHeader:false,cellDates:true,dateNF:'dd/mm/yyyy hh:mm'});
+  ws['!cols']=[{wch:34},{wch:18},{wch:20},{wch:18},{wch:17},{wch:16},{wch:28},{wch:20},{wch:21}];ws['!rows']=[{hpt:24}];ws['!autofilter']={ref:`A6:${XLSX.utils.encode_col(headers.length-1)}${summary.length+6}`};if(ws.B2)ws.B2.z='dd/mm/yyyy hh:mm';return ws;
+}
+async function downloadAdminExport(){
+  if(!state.isAdmin)return toast('Somente administradores podem exportar os dados.','error');
+  const unitIds=[...state.exportUnitIds].map(Number),includeInventory=$('export-inventory').checked,includeOrders=$('export-orders').checked;
+  if(!unitIds.length)return toast('Selecione pelo menos uma unidade.','error');if(!includeInventory&&!includeOrders)return toast('Escolha inventário, pedidos de compra ou ambos.','error');if(!window.XLSX)return toast('O gerador de Excel não foi carregado. Atualize a página e tente novamente.','error');
+  const button=$('download-export'),original=button.textContent;button.disabled=true;button.textContent='Preparando arquivo...';
+  try{
+    const [rooms,inventory,orders]=await Promise.all([
+      includeInventory?fetchExportRows('portal_salas','id,unidade_id,nome,descricao,criado_em,atualizado_em',unitIds,{sortField:'nome'}):[],
+      includeInventory?fetchExportRows('portal_inventario','id,unidade_id,sala_id,item_nome,categoria,quantidade,patrimonio,numero_serie,marca,modelo,estado,observacoes,criado_em,atualizado_em',unitIds,{activeOnly:true}):[],
+      includeOrders?fetchExportRows('portal_pedidos_itens','id,unidade_id,item_nome,categoria,quantidade,unidade_medida,especificacao,justificativa,prioridade,status,criado_em,atualizado_em,cancelado_em,atendido_em',unitIds):[]
+    ]);
+    const selectedUnits=state.units.filter(u=>state.exportUnitIds.has(String(u.id))).sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR')),roomNames=new Map(rooms.map(r=>[r.id,r.nome])),wb=XLSX.utils.book_new(),usedNames=new Set();
+    wb.Props={Title:'Portal Unidades — Inventários e pedidos de compra',Subject:'Exportação administrativa por unidade',Author:state.profile?.nome||'Portal Unidades',CreatedDate:new Date()};
+    XLSX.utils.book_append_sheet(wb,makeSummarySheet(selectedUnits,rooms,inventory,orders,includeInventory,includeOrders),'Resumo');usedNames.add('Resumo');
+    for(const unit of selectedUnits){
+      if(includeInventory){const rows=inventory.filter(i=>String(i.unidade_id)===String(unit.id)).map(i=>({'Unidade':unit.nome,'Sala':roomNames.get(i.sala_id)||'Não identificada','Item':i.item_nome,'Categoria':i.categoria||'','Quantidade':Number(i.quantidade||0),'Patrimônio':i.patrimonio||'','Número de série':i.numero_serie||'','Marca':i.marca||'','Modelo':i.modelo||'','Estado':i.estado,'Observações':i.observacoes||'','Cadastrado em':exportDate(i.criado_em),'Atualizado em':exportDate(i.atualizado_em)})),headers=['Unidade','Sala','Item','Categoria','Quantidade','Patrimônio','Número de série','Marca','Modelo','Estado','Observações','Cadastrado em','Atualizado em'];XLSX.utils.book_append_sheet(wb,makeDataSheet(rows,headers,[28,24,30,20,12,18,20,18,20,14,42,20,20],['Cadastrado em','Atualizado em']),uniqueSheetName('INV',unit.nome,usedNames));}
+      if(includeOrders){const rows=orders.filter(o=>String(o.unidade_id)===String(unit.id)).map(o=>({'Unidade':unit.nome,'Item':o.item_nome,'Categoria':o.categoria||'','Quantidade':Number(o.quantidade||0),'Unidade de medida':o.unidade_medida,'Prioridade':o.prioridade,'Status':o.status,'Especificação':o.especificacao||'','Justificativa':o.justificativa||'','Solicitado em':exportDate(o.criado_em),'Atualizado em':exportDate(o.atualizado_em),'Cancelado em':exportDate(o.cancelado_em),'Atendido em':exportDate(o.atendido_em)})),headers=['Unidade','Item','Categoria','Quantidade','Unidade de medida','Prioridade','Status','Especificação','Justificativa','Solicitado em','Atualizado em','Cancelado em','Atendido em'];XLSX.utils.book_append_sheet(wb,makeDataSheet(rows,headers,[28,32,20,12,18,14,14,48,48,20,20,20,20],['Solicitado em','Atualizado em','Cancelado em','Atendido em']),uniqueSheetName('PED',unit.nome,usedNames));}
+    }
+    const now=new Date(),stamp=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}`;XLSX.writeFile(wb,`portal-unidades_${stamp}.xlsx`,{compression:true,cellDates:true});toast('Arquivo Excel gerado com sucesso.');closeExportModal();
+  }catch(error){console.error(error);toast(`Não foi possível gerar o arquivo: ${error.message||'erro inesperado'}`,'error');}
+  finally{button.disabled=false;button.textContent=original;}
+}
+
 async function submitRoom(e){e.preventDefault();setBusy(e.currentTarget,true,'Salvando...');const {error}=await sb.from('portal_salas').insert({unidade_id:state.unitId,nome:$('room-name').value.trim(),descricao:$('room-description').value.trim()||null,criado_por:state.user.id});setBusy(e.currentTarget,false);if(error)return toast(error.message,'error');e.currentTarget.reset();toggleForm('room-form',false);toast('Sala cadastrada.');await loadCoordinatorData();}
 async function submitInventory(e){e.preventDefault();if(!state.rooms.length)return toast('Cadastre uma sala primeiro.','error');setBusy(e.currentTarget,true,'Salvando...');const payload={unidade_id:state.unitId,sala_id:$('inventory-room').value,item_nome:$('inventory-name').value.trim(),categoria:$('inventory-category').value.trim()||null,quantidade:Number($('inventory-quantity').value),patrimonio:$('inventory-asset').value.trim()||null,numero_serie:$('inventory-serial').value.trim()||null,marca:$('inventory-brand').value.trim()||null,modelo:$('inventory-model').value.trim()||null,estado:$('inventory-state').value,observacoes:$('inventory-notes').value.trim()||null,criado_por:state.user.id,atualizado_por:state.user.id};const {error}=await sb.from('portal_inventario').insert(payload);setBusy(e.currentTarget,false);if(error)return toast(error.message,'error');e.currentTarget.reset();$('inventory-quantity').value=1;toggleForm('inventory-form',false);toast('Item incluído no inventário.');await loadCoordinatorData();}
 async function submitOrder(e){e.preventDefault();setBusy(e.currentTarget,true,'Adicionando...');const payload={unidade_id:state.unitId,item_nome:$('order-name').value.trim(),categoria:$('order-category').value.trim()||null,quantidade:Number($('order-quantity').value),unidade_medida:$('order-unit').value,prioridade:$('order-priority').value,especificacao:$('order-spec').value.trim()||null,justificativa:$('order-justification').value.trim()||null,criado_por:state.user.id,atualizado_por:state.user.id};const {error}=await sb.from('portal_pedidos_itens').insert(payload);setBusy(e.currentTarget,false);if(error)return toast(error.message,'error');e.currentTarget.reset();$('order-quantity').value=1;toggleForm('order-form',false);toast('Item adicionado à lista de compras.');await loadCoordinatorData();}
@@ -166,6 +245,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
   $('room-form').onsubmit=submitRoom;$('inventory-form').onsubmit=submitInventory;$('order-form').onsubmit=submitOrder;
   $('inventory-room-filter').onchange=renderInventory;$('inventory-search').oninput=renderInventory;$('order-search').oninput=renderOrders;$('admin-search').oninput=renderAdminOverview;$('admin-unit-filter').onchange=renderAdminOverview;
   $('admin-unit-switch').onchange=e=>switchAdminUnit(e.target.value);
+  $('open-export').onclick=openExportModal;$('close-export').onclick=closeExportModal;$('export-unit-search').oninput=renderExportUnits;$('export-select-all').onclick=()=>{state.units.forEach(u=>state.exportUnitIds.add(String(u.id)));renderExportUnits()};$('export-clear').onclick=()=>{state.exportUnitIds.clear();renderExportUnits()};$('export-unit-list').onchange=e=>{const input=e.target.closest('input[type="checkbox"]');if(!input)return;input.checked?state.exportUnitIds.add(input.value):state.exportUnitIds.delete(input.value);updateExportSelectedCount()};$('download-export').onclick=downloadAdminExport;$('export-modal').onclick=e=>{if(e.target===$('export-modal'))closeExportModal()};document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('export-modal').hidden)closeExportModal()});
   document.body.addEventListener('click',async e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.inventoryQty)await changeQty('portal_inventario',b.dataset.inventoryQty,b.dataset.delta);else if(b.dataset.inventoryRemove)await updateItem('portal_inventario',b.dataset.inventoryRemove,{ativo:false},'Item retirado do inventário.');else if(b.dataset.orderQty)await changeQty('portal_pedidos_itens',b.dataset.orderQty,b.dataset.delta);else if(b.dataset.orderCancel)await updateItem('portal_pedidos_itens',b.dataset.orderCancel,{status:'CANCELADO'},'Item cancelado.');else if(b.dataset.orderAttend)await updateItem('portal_pedidos_itens',b.dataset.orderAttend,{status:'ATENDIDO'},'Item marcado como atendido.');else if(b.dataset.approve)await reviewAccess(b.dataset.approve,'APROVADO');else if(b.dataset.reject)await reviewAccess(b.dataset.reject,'REJEITADO')});
   const {data}=await sb.auth.getSession();await routeSession(data.session);sb.auth.onAuthStateChange((_event,session)=>{if(session?.access_token!==state.session?.access_token)setTimeout(()=>routeSession(session),0)});
 });

@@ -5,6 +5,8 @@
 - Administradores agora podem selecionar uma unidade no cabeçalho e atuar nela com as mesmas funções do coordenador.
 - A visão por unidade permite cadastrar salas, incluir e atualizar inventário e manter pedidos de compra.
 - A opção "Administração geral" retorna ao consolidado e às aprovações de acesso.
+- Exportação administrativa em Excel com seleção de uma, várias ou todas as unidades.
+- O arquivo exportado pode reunir inventário, pedidos de compra ou ambos, com resumo e abas por unidade.
 
 ## 2026-07-16
 
