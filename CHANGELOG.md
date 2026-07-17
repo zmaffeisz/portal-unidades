@@ -7,6 +7,8 @@
 - A opção "Administração geral" retorna ao consolidado e às aprovações de acesso.
 - Exportação administrativa em Excel com seleção de uma, várias ou todas as unidades.
 - O arquivo exportado pode reunir inventário, pedidos de compra ou ambos, com resumo e abas por unidade.
+- A exportação de pedidos começa por uma aba consolidada dos itens ativos, com as quantidades somadas e sem identificar as unidades.
+- A segunda aba detalha os pedidos ativos por unidade; as abas individuais mantêm também o histórico de atendidos e cancelados.
 
 ## 2026-07-16
 

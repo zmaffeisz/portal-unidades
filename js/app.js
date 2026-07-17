@@ -193,6 +193,26 @@ function makeSummarySheet(selectedUnits,rooms,inventory,orders,includeInventory,
   ws['!merges']=[XLSX.utils.decode_range(`A1:${XLSX.utils.encode_col(Math.max(headers.length-1,0))}1`)];XLSX.utils.sheet_add_json(ws,summary,{origin:'A6',header:headers,skipHeader:false,cellDates:true,dateNF:'dd/mm/yyyy hh:mm'});
   ws['!cols']=[{wch:34},{wch:18},{wch:20},{wch:18},{wch:17},{wch:16},{wch:28},{wch:20},{wch:21}];ws['!rows']=[{hpt:24}];ws['!autofilter']={ref:`A6:${XLSX.utils.encode_col(headers.length-1)}${summary.length+6}`};if(ws.B2)ws.B2.z='dd/mm/yyyy hh:mm';return ws;
 }
+function normalizeOrderValue(value){return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().replace(/\s+/g,' ').toLocaleLowerCase('pt-BR');}
+function makeConsolidatedOrdersSheet(orders){
+  const priorityRank={BAIXA:1,NORMAL:2,ALTA:3,URGENTE:4},groups=new Map();
+  orders.filter(order=>order.status==='ATIVO').forEach(order=>{
+    const key=[order.item_nome,order.categoria,order.unidade_medida].map(normalizeOrderValue).join('|'),current=groups.get(key);
+    if(current){current.quantidade+=Number(order.quantidade||0);if((priorityRank[order.prioridade]||0)>(priorityRank[current.prioridade]||0))current.prioridade=order.prioridade;return;}
+    groups.set(key,{item:order.item_nome,categoria:order.categoria||'',quantidade:Number(order.quantidade||0),unidadeMedida:order.unidade_medida||'',prioridade:order.prioridade||''});
+  });
+  const rows=[...groups.values()].sort((a,b)=>a.item.localeCompare(b.item,'pt-BR')).map(group=>({
+    'Item':group.item,'Categoria':group.categoria,'Quantidade total':group.quantidade,'Unidade de medida':group.unidadeMedida,'Maior prioridade':group.prioridade
+  }));
+  return makeDataSheet(rows,['Item','Categoria','Quantidade total','Unidade de medida','Maior prioridade'],[36,24,18,20,18]);
+}
+function makeOrdersByUnitSheet(selectedUnits,orders){
+  const unitsById=new Map(selectedUnits.map(unit=>[String(unit.id),unit.nome]));
+  const rows=orders.filter(order=>order.status==='ATIVO').map(order=>({
+    'Unidade':unitsById.get(String(order.unidade_id))||'Unidade não identificada','Item':order.item_nome,'Categoria':order.categoria||'','Quantidade':Number(order.quantidade||0),'Unidade de medida':order.unidade_medida||'','Prioridade':order.prioridade||'','Especificação':order.especificacao||'','Justificativa':order.justificativa||'','Solicitado em':exportDate(order.criado_em),'Atualizado em':exportDate(order.atualizado_em)
+  })).sort((a,b)=>a.Unidade.localeCompare(b.Unidade,'pt-BR')||a.Item.localeCompare(b.Item,'pt-BR'));
+  return makeDataSheet(rows,['Unidade','Item','Categoria','Quantidade','Unidade de medida','Prioridade','Especificação','Justificativa','Solicitado em','Atualizado em'],[30,36,22,14,20,16,48,48,20,20],['Solicitado em','Atualizado em']);
+}
 async function downloadAdminExport(){
   if(!state.isAdmin)return toast('Somente administradores podem exportar os dados.','error');
   const unitIds=[...state.exportUnitIds].map(Number),includeInventory=$('export-inventory').checked,includeOrders=$('export-orders').checked;
@@ -206,6 +226,7 @@ async function downloadAdminExport(){
     ]);
     const selectedUnits=state.units.filter(u=>state.exportUnitIds.has(String(u.id))).sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR')),roomNames=new Map(rooms.map(r=>[r.id,r.nome])),wb=XLSX.utils.book_new(),usedNames=new Set();
     wb.Props={Title:'Portal Unidades — Inventários e pedidos de compra',Subject:'Exportação administrativa por unidade',Author:state.profile?.nome||'Portal Unidades',CreatedDate:new Date()};
+    if(includeOrders){XLSX.utils.book_append_sheet(wb,makeConsolidatedOrdersSheet(orders),'Pedidos consolidados');usedNames.add('Pedidos consolidados');XLSX.utils.book_append_sheet(wb,makeOrdersByUnitSheet(selectedUnits,orders),'Pedidos por unidade');usedNames.add('Pedidos por unidade');}
     XLSX.utils.book_append_sheet(wb,makeSummarySheet(selectedUnits,rooms,inventory,orders,includeInventory,includeOrders),'Resumo');usedNames.add('Resumo');
     for(const unit of selectedUnits){
       if(includeInventory){const rows=inventory.filter(i=>String(i.unidade_id)===String(unit.id)).map(i=>({'Unidade':unit.nome,'Sala':roomNames.get(i.sala_id)||'Não identificada','Item':i.item_nome,'Categoria':i.categoria||'','Quantidade':Number(i.quantidade||0),'Patrimônio':i.patrimonio||'','Número de série':i.numero_serie||'','Marca':i.marca||'','Modelo':i.modelo||'','Estado':i.estado,'Observações':i.observacoes||'','Cadastrado em':exportDate(i.criado_em),'Atualizado em':exportDate(i.atualizado_em)})),headers=['Unidade','Sala','Item','Categoria','Quantidade','Patrimônio','Número de série','Marca','Modelo','Estado','Observações','Cadastrado em','Atualizado em'];XLSX.utils.book_append_sheet(wb,makeDataSheet(rows,headers,[28,24,30,20,12,18,20,18,20,14,42,20,20],['Cadastrado em','Atualizado em']),uniqueSheetName('INV',unit.nome,usedNames));}
