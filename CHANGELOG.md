@@ -9,6 +9,7 @@
 - O arquivo exportado pode reunir inventário, pedidos de compra ou ambos, com resumo e abas por unidade.
 - A exportação de pedidos começa por uma aba consolidada dos itens ativos, com as quantidades somadas e sem identificar as unidades.
 - A segunda aba detalha os pedidos ativos por unidade; as abas individuais mantêm também o histórico de atendidos e cancelados.
+- O detalhamento de pedidos por unidade agora começa recolhido: a administração vê as UBS e seus totais, expandindo cada uma apenas quando precisar consultar ou atender os itens.
 
 ## 2026-07-16
 
