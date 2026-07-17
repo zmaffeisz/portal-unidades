@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-07-17
+
+- Administradores agora podem selecionar uma unidade no cabeçalho e atuar nela com as mesmas funções do coordenador.
+- A visão por unidade permite cadastrar salas, incluir e atualizar inventário e manter pedidos de compra.
+- A opção "Administração geral" retorna ao consolidado e às aprovações de acesso.
+
 ## 2026-07-16
 
 - Primeira versão do Portal Unidades.

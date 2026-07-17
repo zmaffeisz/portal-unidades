@@ -77,7 +77,15 @@
   <div id="app-screen" hidden>
     <header class="app-header">
       <div class="app-brand"><div class="brand-mark small">PU</div><div><b>Portal Unidades</b><small id="header-context">Unidade de saúde</small></div></div>
-      <div class="header-user"><div><b id="header-name">Usuário</b><small id="header-role">Coordenador</small></div><button class="btn btn-ghost" id="signout" type="button">Sair</button></div>
+      <div class="header-actions">
+        <label class="admin-unit-switcher admin-only" hidden>
+          <span>Atuar na unidade</span>
+          <select id="admin-unit-switch" aria-label="Selecionar unidade para administrar">
+            <option value="">Administração geral</option>
+          </select>
+        </label>
+        <div class="header-user"><div><b id="header-name">Usuário</b><small id="header-role">Coordenador</small></div><button class="btn btn-ghost" id="signout" type="button">Sair</button></div>
+      </div>
     </header>
 
     <div class="app-shell">

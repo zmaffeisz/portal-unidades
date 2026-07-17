@@ -27,6 +27,7 @@ async function loadUnits(){
   const options='<option value="">Selecione sua unidade</option>'+state.units.map(u=>`<option value="${u.id}">${esc(u.nome)}</option>`).join('');
   $('register-unit').innerHTML=options;
   $('admin-unit-filter').innerHTML='<option value="">Todas as unidades</option>'+state.units.map(u=>`<option value="${u.id}">${esc(u.nome)}</option>`).join('');
+  $('admin-unit-switch').innerHTML='<option value="">Administração geral</option>'+state.units.map(u=>`<option value="${u.id}">${esc(u.nome)}</option>`).join('');
 }
 
 async function routeSession(session){
@@ -57,9 +58,22 @@ async function startCoordinator(){
 }
 async function startAdmin(){
   showOnly('app-screen');document.querySelectorAll('.coordinator-only').forEach(el=>el.hidden=true);document.querySelectorAll('.admin-only').forEach(el=>el.hidden=false);
+  $('admin-unit-switch').value='';
   $('header-context').textContent='Visão de todas as unidades';$('header-name').textContent=state.profile?.nome||state.user.email;$('header-role').textContent='Administrador';
   $('welcome-title').textContent='Planejamento consolidado';
   await loadAdminData();openTab('admin');subscribeRealtime();
+}
+async function startAdminUnit(unitId){
+  state.unitId=Number(unitId);showOnly('app-screen');document.querySelectorAll('.coordinator-only,.admin-only').forEach(el=>el.hidden=false);
+  $('admin-unit-switch').value=String(state.unitId);$('header-context').textContent=unitName(state.unitId);$('header-name').textContent=state.profile?.nome||state.user.email;$('header-role').textContent='Administrador atuando na unidade';
+  $('welcome-title').textContent=`Visão da ${unitName(state.unitId)}`;
+  await loadCoordinatorData();openTab('overview');subscribeRealtime();
+}
+async function switchAdminUnit(value){
+  if(!state.isAdmin)return;
+  document.querySelectorAll('.inline-form').forEach(form=>form.hidden=true);
+  if(!value){state.unitId=null;await startAdmin();return;}
+  await startAdminUnit(value);
 }
 
 async function loadCoordinatorData(){
@@ -116,7 +130,7 @@ function renderAdminOverview(){
   $('consolidated-table').innerHTML=cons.length?cons.map(i=>`<tr><td><strong>${esc(i.item_nome)}</strong></td><td>${esc(i.categoria||'—')}</td><td><strong>${i.quantidade_total} ${esc(i.unidade_medida.toLowerCase())}</strong></td><td>${i.total_unidades}</td><td>${fmtDate(i.atualizado_em)}</td></tr>`).join(''):'<tr><td colspan="5" class="empty-state">Nenhum pedido ativo.</td></tr>';
   const orders=state.adminOrders.filter(o=>!unit||String(o.unidade_id)===unit);const groups={};orders.forEach(o=>(groups[o.unidade_id]??=[]).push(o));
   $('admin-orders-by-unit').innerHTML=Object.keys(groups).length?Object.entries(groups).sort((a,b)=>unitName(a[0]).localeCompare(unitName(b[0]),'pt-BR')).map(([id,items])=>`<article class="unit-group"><div class="unit-group-head"><strong>${esc(unitName(id))}</strong><span>${items.length} ${items.length===1?'item':'itens'} · ${items.reduce((s,i)=>s+Number(i.quantidade),0)} unidades</span></div><div class="unit-group-body">${items.map(i=>`<div class="simple-row"><div><strong>${esc(i.item_nome)}</strong><small>${esc(i.categoria||'Sem categoria')} · ${esc(i.prioridade)}</small></div><div><b>${i.quantidade} ${esc(i.unidade_medida.toLowerCase())}</b> <button class="icon-btn" data-order-attend="${i.id}">Marcar atendido</button></div></div>`).join('')}</div></article>`).join(''):'<div class="panel empty-state">Nenhum pedido para o filtro selecionado.</div>';
-  $('metric-rooms').textContent='—';$('metric-inventory').textContent='—';$('metric-orders').textContent=state.adminOrders.length;$('metric-order-units').textContent=`${state.adminOrders.reduce((s,i)=>s+Number(i.quantidade),0)} unidades solicitadas`;$('overview-orders').innerHTML='Use a aba Consolidado para acompanhar todas as unidades.';$('overview-rooms').innerHTML='Visão administrativa ativa.';
+  if(!state.unitId){$('metric-rooms').textContent='—';$('metric-inventory').textContent='—';$('metric-orders').textContent=state.adminOrders.length;$('metric-order-units').textContent=`${state.adminOrders.reduce((s,i)=>s+Number(i.quantidade),0)} unidades solicitadas`;$('overview-orders').innerHTML='Use a aba Consolidado para acompanhar todas as unidades.';$('overview-rooms').innerHTML='Visão administrativa ativa.';}
 }
 function renderApprovals(){
   const pending=state.approvals.filter(a=>a.status==='PENDENTE');$('approval-badge').textContent=pending.length;
@@ -127,7 +141,7 @@ async function submitRoom(e){e.preventDefault();setBusy(e.currentTarget,true,'Sa
 async function submitInventory(e){e.preventDefault();if(!state.rooms.length)return toast('Cadastre uma sala primeiro.','error');setBusy(e.currentTarget,true,'Salvando...');const payload={unidade_id:state.unitId,sala_id:$('inventory-room').value,item_nome:$('inventory-name').value.trim(),categoria:$('inventory-category').value.trim()||null,quantidade:Number($('inventory-quantity').value),patrimonio:$('inventory-asset').value.trim()||null,numero_serie:$('inventory-serial').value.trim()||null,marca:$('inventory-brand').value.trim()||null,modelo:$('inventory-model').value.trim()||null,estado:$('inventory-state').value,observacoes:$('inventory-notes').value.trim()||null,criado_por:state.user.id,atualizado_por:state.user.id};const {error}=await sb.from('portal_inventario').insert(payload);setBusy(e.currentTarget,false);if(error)return toast(error.message,'error');e.currentTarget.reset();$('inventory-quantity').value=1;toggleForm('inventory-form',false);toast('Item incluído no inventário.');await loadCoordinatorData();}
 async function submitOrder(e){e.preventDefault();setBusy(e.currentTarget,true,'Adicionando...');const payload={unidade_id:state.unitId,item_nome:$('order-name').value.trim(),categoria:$('order-category').value.trim()||null,quantidade:Number($('order-quantity').value),unidade_medida:$('order-unit').value,prioridade:$('order-priority').value,especificacao:$('order-spec').value.trim()||null,justificativa:$('order-justification').value.trim()||null,criado_por:state.user.id,atualizado_por:state.user.id};const {error}=await sb.from('portal_pedidos_itens').insert(payload);setBusy(e.currentTarget,false);if(error)return toast(error.message,'error');e.currentTarget.reset();$('order-quantity').value=1;toggleForm('order-form',false);toast('Item adicionado à lista de compras.');await loadCoordinatorData();}
 async function changeQty(table,id,delta){const list=table==='portal_inventario'?state.inventory:state.orders,row=list.find(x=>x.id===id);if(!row)return;const next=Number(row.quantidade)+Number(delta);if(next<1)return toast('A quantidade mínima é 1.','error');const {error}=await sb.from(table).update({quantidade:next}).eq('id',id);if(error)return toast(error.message,'error');await loadCoordinatorData();}
-async function updateItem(table,id,patch,message){const {error}=await sb.from(table).update(patch).eq('id',id);if(error)return toast(error.message,'error');toast(message);state.isAdmin?await loadAdminData():await loadCoordinatorData();}
+async function updateItem(table,id,patch,message){const {error}=await sb.from(table).update(patch).eq('id',id);if(error)return toast(error.message,'error');toast(message);state.isAdmin&&!state.unitId?await loadAdminData():await loadCoordinatorData();}
 async function reviewAccess(id,status){
   const row=state.approvals.find(a=>a.user_id===id);if(!row)return;
   const {error}=await sb.from('portal_unidades_acessos').update({status,unidade_id:status==='APROVADO'?row.unidade_solicitada_id:null}).eq('user_id',id);
@@ -139,7 +153,7 @@ function resetRealtime(){if(state.channel){sb.removeChannel(state.channel);state
 function subscribeRealtime(){
   resetRealtime();if(!state.user)return;state.channel=sb.channel(`portal-${state.user.id}`).on('postgres_changes',{event:'*',schema:'public',table:'portal_unidades_acessos'},scheduleReload).on('postgres_changes',{event:'*',schema:'public',table:'portal_salas'},scheduleReload).on('postgres_changes',{event:'*',schema:'public',table:'portal_inventario'},scheduleReload).on('postgres_changes',{event:'*',schema:'public',table:'portal_pedidos_itens'},scheduleReload).subscribe();
 }
-function scheduleReload(){clearTimeout(reloadTimer);reloadTimer=setTimeout(()=>state.isAdmin?loadAdminData():state.access?.status==='APROVADO'?loadCoordinatorData():routeSession(state.session),350);}
+function scheduleReload(){clearTimeout(reloadTimer);reloadTimer=setTimeout(()=>state.isAdmin?(state.unitId?loadCoordinatorData():loadAdminData()):state.access?.status==='APROVADO'?loadCoordinatorData():routeSession(state.session),350);}
 
 document.addEventListener('DOMContentLoaded',async()=>{
   await loadUnits();
@@ -147,10 +161,11 @@ document.addEventListener('DOMContentLoaded',async()=>{
   $('login-form').onsubmit=async e=>{e.preventDefault();setBusy(e.currentTarget,true,'Entrando...');const {data,error}=await sb.auth.signInWithPassword({email:$('login-email').value.trim(),password:$('login-password').value});setBusy(e.currentTarget,false);if(error)return toast('E-mail ou senha inválidos.','error');await routeSession(data.session)};
   $('register-form').onsubmit=async e=>{e.preventDefault();if($('register-password').value!==$('register-password-confirm').value)return toast('As senhas não conferem.','error');setBusy(e.currentTarget,true,'Enviando...');const {error}=await sb.auth.signUp({email:$('register-email').value.trim(),password:$('register-password').value,options:{emailRedirectTo:new URL('index.html',location.href).href,data:{portal_unidades:'true',nome:$('register-name').value.trim(),unidade_id:$('register-unit').value}}});setBusy(e.currentTarget,false);if(error)return toast(error.message,'error');toast('Solicitação criada. Confira seu e-mail e aguarde a aprovação.');$('register-view').hidden=true;$('login-view').hidden=false;e.currentTarget.reset()};
   $('signout').onclick=$('pending-signout').onclick=async()=>{await sb.auth.signOut();showOnly('auth-screen')};$('pending-refresh').onclick=async()=>{const {data}=await sb.auth.getSession();await routeSession(data.session)};
-  document.querySelectorAll('.nav-item').forEach(b=>b.onclick=()=>openTab(b.dataset.tab));document.querySelectorAll('[data-goto]').forEach(b=>b.onclick=()=>openTab(b.dataset.goto));
+  document.querySelectorAll('.nav-item').forEach(b=>b.onclick=async()=>{if(state.isAdmin&&['admin','approvals'].includes(b.dataset.tab))await loadAdminData();openTab(b.dataset.tab)});document.querySelectorAll('[data-goto]').forEach(b=>b.onclick=()=>openTab(b.dataset.goto));
   $('toggle-room-form').onclick=()=>toggleForm('room-form');$('toggle-inventory-form').onclick=()=>toggleForm('inventory-form');$('toggle-order-form').onclick=()=>toggleForm('order-form');document.querySelectorAll('[data-close-form]').forEach(b=>b.onclick=()=>toggleForm(b.dataset.closeForm,false));
   $('room-form').onsubmit=submitRoom;$('inventory-form').onsubmit=submitInventory;$('order-form').onsubmit=submitOrder;
   $('inventory-room-filter').onchange=renderInventory;$('inventory-search').oninput=renderInventory;$('order-search').oninput=renderOrders;$('admin-search').oninput=renderAdminOverview;$('admin-unit-filter').onchange=renderAdminOverview;
+  $('admin-unit-switch').onchange=e=>switchAdminUnit(e.target.value);
   document.body.addEventListener('click',async e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.inventoryQty)await changeQty('portal_inventario',b.dataset.inventoryQty,b.dataset.delta);else if(b.dataset.inventoryRemove)await updateItem('portal_inventario',b.dataset.inventoryRemove,{ativo:false},'Item retirado do inventário.');else if(b.dataset.orderQty)await changeQty('portal_pedidos_itens',b.dataset.orderQty,b.dataset.delta);else if(b.dataset.orderCancel)await updateItem('portal_pedidos_itens',b.dataset.orderCancel,{status:'CANCELADO'},'Item cancelado.');else if(b.dataset.orderAttend)await updateItem('portal_pedidos_itens',b.dataset.orderAttend,{status:'ATENDIDO'},'Item marcado como atendido.');else if(b.dataset.approve)await reviewAccess(b.dataset.approve,'APROVADO');else if(b.dataset.reject)await reviewAccess(b.dataset.reject,'REJEITADO')});
   const {data}=await sb.auth.getSession();await routeSession(data.session);sb.auth.onAuthStateChange((_event,session)=>{if(session?.access_token!==state.session?.access_token)setTimeout(()=>routeSession(session),0)});
 });
