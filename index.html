@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Inventário e pedidos de compra das unidades de saúde de Sorocaba.">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Portal Unidades</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+  <script src="js/config.js" defer></script>
+  <script src="js/app.js" defer></script>
+</head>
+<body>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <main id="auth-screen" class="auth-layout">
+    <section class="auth-brand">
+      <div class="brand-mark">PU</div>
+      <p class="eyebrow">Secretaria da Saúde · Sorocaba</p>
+      <h1>Portal<br>Unidades</h1>
+      <p class="auth-lead">Inventário por salas e pedidos de compra sempre atualizados, direto da sua unidade.</p>
+      <div class="brand-feature"><span>01</span><div><b>Organize o inventário</b><small>Equipamentos e mobiliários por ambiente</small></div></div>
+      <div class="brand-feature"><span>02</span><div><b>Mantenha suas necessidades</b><small>Uma lista permanente de itens para compra</small></div></div>
+      <div class="brand-feature"><span>03</span><div><b>Planejamento conjunto</b><small>Demandas consolidadas de todas as unidades</small></div></div>
+    </section>
+
+    <section class="auth-panel">
+      <div class="auth-card">
+        <div id="login-view">
+          <p class="eyebrow">Acesso do coordenador</p>
+          <h2>Entrar no portal</h2>
+          <p class="muted">Use o e-mail cadastrado e sua senha.</p>
+          <form id="login-form" class="stack-form">
+            <label>E-mail<input id="login-email" type="email" autocomplete="email" required placeholder="nome@sorocaba.sp.gov.br"></label>
+            <label>Senha<input id="login-password" type="password" autocomplete="current-password" required placeholder="Sua senha"></label>
+            <button class="btn btn-primary" type="submit">Entrar</button>
+          </form>
+          <p class="switch-copy">Ainda não tem acesso? <button class="text-button" id="show-register" type="button">Solicitar cadastro</button></p>
+        </div>
+
+        <div id="register-view" hidden>
+          <p class="eyebrow">Novo acesso</p>
+          <h2>Solicitar cadastro</h2>
+          <p class="muted">Escolha sua unidade. O acesso só será liberado depois da conferência de um administrador.</p>
+          <form id="register-form" class="stack-form">
+            <label>Nome completo<input id="register-name" type="text" autocomplete="name" required></label>
+            <label>E-mail institucional<input id="register-email" type="email" autocomplete="email" required></label>
+            <label>Unidade de saúde<select id="register-unit" required><option value="">Carregando unidades...</option></select></label>
+            <div class="form-grid two">
+              <label>Senha<input id="register-password" type="password" autocomplete="new-password" minlength="6" required></label>
+              <label>Confirmar senha<input id="register-password-confirm" type="password" autocomplete="new-password" minlength="6" required></label>
+            </div>
+            <button class="btn btn-primary" type="submit">Enviar solicitação</button>
+          </form>
+          <p class="switch-copy">Já possui cadastro? <button class="text-button" id="show-login" type="button">Voltar ao login</button></p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <main id="pending-screen" class="center-screen" hidden>
+    <section class="status-card">
+      <div class="status-icon">✓</div>
+      <p class="eyebrow">Solicitação recebida</p>
+      <h1 id="pending-title">Aguardando aprovação</h1>
+      <p id="pending-copy">Seu cadastro foi criado e está aguardando a conferência do vínculo com a unidade.</p>
+      <div class="status-unit" id="pending-unit">Unidade selecionada</div>
+      <button class="btn btn-secondary" id="pending-refresh" type="button">Verificar novamente</button>
+      <button class="text-button" id="pending-signout" type="button">Sair</button>
+    </section>
+  </main>
+
+  <div id="app-screen" hidden>
+    <header class="app-header">
+      <div class="app-brand"><div class="brand-mark small">PU</div><div><b>Portal Unidades</b><small id="header-context">Unidade de saúde</small></div></div>
+      <div class="header-user"><div><b id="header-name">Usuário</b><small id="header-role">Coordenador</small></div><button class="btn btn-ghost" id="signout" type="button">Sair</button></div>
+    </header>
+
+    <div class="app-shell">
+      <nav class="sidebar" aria-label="Navegação principal">
+        <button class="nav-item active" data-tab="overview"><span>⌂</span>Visão geral</button>
+        <button class="nav-item coordinator-only" data-tab="inventory"><span>▦</span>Inventário</button>
+        <button class="nav-item coordinator-only" data-tab="orders"><span>＋</span>Pedidos de compra</button>
+        <button class="nav-item admin-only" data-tab="admin" hidden><span>◎</span>Consolidado</button>
+        <button class="nav-item admin-only" data-tab="approvals" hidden><span>✓</span>Aprovações <i id="approval-badge" class="badge-count">0</i></button>
+      </nav>
+
+      <main class="content">
+        <section id="tab-overview" class="tab-panel">
+          <div class="page-heading"><div><p class="eyebrow">Resumo atualizado</p><h1 id="welcome-title">Olá!</h1><p class="muted">Acompanhe o inventário e mantenha os pedidos da unidade em dia.</p></div><span class="live-pill"><i></i>Dados em tempo real</span></div>
+          <div class="metric-grid">
+            <article class="metric-card"><span>Salas cadastradas</span><strong id="metric-rooms">0</strong><small>ambientes ativos</small></article>
+            <article class="metric-card"><span>Itens no inventário</span><strong id="metric-inventory">0</strong><small id="metric-inventory-units">0 unidades físicas</small></article>
+            <article class="metric-card accent"><span>Pedidos ativos</span><strong id="metric-orders">0</strong><small id="metric-order-units">0 unidades solicitadas</small></article>
+          </div>
+          <div class="overview-grid">
+            <article class="panel"><div class="panel-head"><div><p class="eyebrow">Necessidades atuais</p><h2>Últimos pedidos</h2></div><button class="text-button coordinator-only" data-goto="orders">Ver todos</button></div><div id="overview-orders" class="simple-list empty-state">Nenhum pedido ativo.</div></article>
+            <article class="panel"><div class="panel-head"><div><p class="eyebrow">Distribuição</p><h2>Inventário por sala</h2></div><button class="text-button coordinator-only" data-goto="inventory">Abrir inventário</button></div><div id="overview-rooms" class="bar-list empty-state">Nenhuma sala cadastrada.</div></article>
+          </div>
+        </section>
+
+        <section id="tab-inventory" class="tab-panel" hidden>
+          <div class="page-heading"><div><p class="eyebrow">Patrimônio da unidade</p><h1>Inventário por salas</h1><p class="muted">Cadastre os ambientes e mantenha a situação dos itens atualizada.</p></div><button class="btn btn-primary" id="toggle-inventory-form">+ Adicionar item</button></div>
+          <div class="toolbar"><select id="inventory-room-filter"><option value="">Todas as salas</option></select><input id="inventory-search" type="search" placeholder="Buscar item, patrimônio ou série"><button class="btn btn-secondary" id="toggle-room-form">+ Nova sala</button></div>
+          <form id="room-form" class="inline-form" hidden><label>Nome da sala<input id="room-name" required placeholder="Ex.: Consultório 01"></label><label>Descrição<input id="room-description" placeholder="Opcional"></label><div class="form-actions"><button class="btn btn-primary" type="submit">Cadastrar sala</button><button class="btn btn-ghost" type="button" data-close-form="room-form">Cancelar</button></div></form>
+          <form id="inventory-form" class="inline-form expanded" hidden>
+            <label>Sala<select id="inventory-room" required></select></label><label>Item<input id="inventory-name" required placeholder="Ex.: Cadeira giratória"></label><label>Categoria<input id="inventory-category" placeholder="Mobiliário, informática..."></label><label>Quantidade<input id="inventory-quantity" type="number" min="1" value="1" required></label><label>Patrimônio<input id="inventory-asset" placeholder="Se houver"></label><label>Número de série<input id="inventory-serial" placeholder="Se houver"></label><label>Marca<input id="inventory-brand"></label><label>Modelo<input id="inventory-model"></label><label>Estado<select id="inventory-state"><option>NOVO</option><option selected>BOM</option><option>REGULAR</option><option>RUIM</option><option>INSERVIVEL</option></select></label><label class="span-2">Observações<textarea id="inventory-notes" rows="2"></textarea></label><div class="form-actions span-2"><button class="btn btn-primary" type="submit">Salvar item</button><button class="btn btn-ghost" type="button" data-close-form="inventory-form">Cancelar</button></div>
+          </form>
+          <div class="table-wrap"><table><thead><tr><th>Item</th><th>Sala</th><th>Qtde</th><th>Patrimônio / Série</th><th>Estado</th><th>Atualizado</th><th></th></tr></thead><tbody id="inventory-table"></tbody></table></div>
+        </section>
+
+        <section id="tab-orders" class="tab-panel" hidden>
+          <div class="page-heading"><div><p class="eyebrow">Lista permanente</p><h1>Pedidos de compra</h1><p class="muted">Os itens permanecem aqui até serem cancelados ou atendidos.</p></div><button class="btn btn-primary" id="toggle-order-form">+ Adicionar pedido</button></div>
+          <form id="order-form" class="inline-form expanded" hidden>
+            <label>Item desejado<input id="order-name" required placeholder="Ex.: Cadeira fixa sem braço"></label><label>Categoria<input id="order-category" placeholder="Mobiliário, equipamento..."></label><label>Quantidade<input id="order-quantity" type="number" min="1" value="1" required></label><label>Unidade de medida<select id="order-unit"><option>UNIDADE</option><option>CAIXA</option><option>PACOTE</option><option>KIT</option><option>LITRO</option><option>METRO</option></select></label><label>Prioridade<select id="order-priority"><option>BAIXA</option><option selected>NORMAL</option><option>ALTA</option><option>URGENTE</option></select></label><label class="span-2">Especificação<textarea id="order-spec" rows="2" placeholder="Características necessárias"></textarea></label><label class="span-2">Justificativa<textarea id="order-justification" rows="2" placeholder="Por que a unidade precisa deste item?"></textarea></label><div class="form-actions span-2"><button class="btn btn-primary" type="submit">Adicionar à lista</button><button class="btn btn-ghost" type="button" data-close-form="order-form">Cancelar</button></div>
+          </form>
+          <div class="cart-header"><div><strong id="cart-count">0 itens</strong><span id="cart-total">0 unidades solicitadas</span></div><input id="order-search" type="search" placeholder="Buscar na lista"></div>
+          <div id="orders-list" class="cart-grid"></div>
+        </section>
+
+        <section id="tab-admin" class="tab-panel" hidden>
+          <div class="page-heading"><div><p class="eyebrow">Planejamento de compras</p><h1>Pedidos consolidados</h1><p class="muted">Quantidade total solicitada e número de unidades interessadas.</p></div><span class="live-pill"><i></i>Atualização automática</span></div>
+          <div class="toolbar"><input id="admin-search" type="search" placeholder="Buscar item consolidado"><select id="admin-unit-filter"><option value="">Todas as unidades</option></select></div>
+          <div class="table-wrap"><table><thead><tr><th>Item</th><th>Categoria</th><th>Quantidade total</th><th>Unidades solicitantes</th><th>Última atualização</th></tr></thead><tbody id="consolidated-table"></tbody></table></div>
+          <div class="section-title"><div><p class="eyebrow">Detalhamento</p><h2>Pedidos por unidade</h2></div></div>
+          <div id="admin-orders-by-unit" class="unit-groups"></div>
+        </section>
+
+        <section id="tab-approvals" class="tab-panel" hidden>
+          <div class="page-heading"><div><p class="eyebrow">Controle de acesso</p><h1>Solicitações de coordenadores</h1><p class="muted">Confira a pessoa e a UBS antes de liberar o portal.</p></div></div>
+          <div id="approvals-list" class="approval-list"></div>
+        </section>
+      </main>
+    </div>
+  </div>
+</body>
+</html>
