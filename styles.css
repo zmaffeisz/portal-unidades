@@ -47,3 +47,24 @@
 .room-order-item-main p{margin:7px 0 0;color:var(--muted);font-size:12px;line-height:1.45}
 .room-order-item-actions{display:flex;align-items:center;gap:18px;flex-wrap:wrap;justify-content:flex-end}
 @media(max-width:700px){.room-order-item{align-items:flex-start;flex-direction:column}.room-order-item-actions{width:100%;justify-content:space-between}.room-order-summary{padding:15px}.orders-summary{padding:18px}}
+
+#inventory-room-cards{display:grid;gap:12px;margin-top:16px}
+.inventory-room-card{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.inventory-room-summary{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:17px 20px;background:#f0f5f7;cursor:pointer;list-style:none}
+.inventory-room-summary::-webkit-details-marker{display:none}
+.inventory-room-summary::before{content:'›';display:grid;place-items:center;width:22px;height:22px;margin-right:1px;border:1px solid var(--line);border-radius:50%;background:#fff;color:var(--teal);font-size:19px;line-height:1;transition:transform .15s}
+.inventory-room-card[open] .inventory-room-summary::before{transform:rotate(90deg)}
+.inventory-room-summary>span{display:flex;align-items:center;gap:12px;margin-right:auto}
+.inventory-room-summary>span strong{font-size:14px}
+.inventory-room-summary small{display:block;margin-top:3px;color:var(--muted);font-size:11px}
+.inventory-room-summary>b{color:var(--navy);font-size:12px;white-space:nowrap}
+.inventory-room-body{padding:4px 20px}
+.inventory-room-item{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:20px;padding:15px 0;border-top:1px solid var(--line)}
+.inventory-room-item:first-child{border-top:0}
+.inventory-room-item-main{min-width:0}
+.inventory-room-item-main strong{display:block;font-size:13px}
+.inventory-room-item-main small{display:block;margin-top:3px;color:var(--muted);font-size:11px}
+.inventory-room-item-main p{margin:7px 0 0;color:var(--muted);font-size:11px}
+.inventory-room-actions{display:flex;align-items:center;gap:7px}
+.inventory-room-actions strong{min-width:24px;text-align:center}
+@media(max-width:700px){.inventory-room-summary{padding:15px}.inventory-room-item{grid-template-columns:1fr auto}.inventory-room-item>.state-pill{grid-column:2;grid-row:1}.inventory-room-actions{grid-column:1 / -1;justify-content:flex-end}}
