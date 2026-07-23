@@ -114,19 +114,34 @@
 
         <section id="tab-inventory" class="tab-panel" hidden>
           <div class="page-heading"><div><p class="eyebrow">Patrimônio da unidade</p><h1>Inventário por salas</h1><p class="muted">Abra uma sala para consultar os itens ou adicionar um novo item nela.</p></div></div>
+          <div class="inventory-subtabs" role="tablist"><button class="inventory-subtab active" data-inventory-view="active" role="tab">Inventário ativo</button><button class="inventory-subtab" data-inventory-view="unserviceable" role="tab">Inservíveis <span id="unserviceable-count">0</span></button><button class="inventory-subtab" data-inventory-view="transfers" role="tab">Transferências <span id="transfer-count">0</span></button></div>
+          <div id="inventory-view-active">
           <div class="toolbar"><select id="inventory-room-filter"><option value="">Todas as salas</option></select><input id="inventory-search" type="search" placeholder="Buscar item, patrimônio ou série"><button class="btn btn-secondary" id="toggle-room-form">+ Nova sala</button></div>
           <form id="room-form" class="inline-form" hidden><label>Nome da sala<input id="room-name" required placeholder="Ex.: Consultório 01"></label><label>Descrição<input id="room-description" placeholder="Opcional"></label><div class="form-actions"><button class="btn btn-primary" type="submit">Cadastrar sala</button><button class="btn btn-ghost" type="button" data-close-form="room-form">Cancelar</button></div></form>
-          <form id="inventory-form" class="inline-form expanded" hidden>
-            <label>Sala<select id="inventory-room" required></select></label><label>Item<input id="inventory-name" required placeholder="Ex.: Cadeira giratória"></label><label>Categoria<input id="inventory-category" placeholder="Mobiliário, informática..."></label><label>Quantidade<input id="inventory-quantity" type="number" min="1" value="1" required></label><label>Patrimônio<input id="inventory-asset" placeholder="Se houver"></label><label>Número de série<input id="inventory-serial" placeholder="Se houver"></label><label>Marca<input id="inventory-brand"></label><label>Modelo<input id="inventory-model"></label><label>Estado<select id="inventory-state"><option>NOVO</option><option selected>BOM</option><option>REGULAR</option><option>RUIM</option><option>INSERVIVEL</option></select></label><label class="span-2">Observações<textarea id="inventory-notes" rows="2"></textarea></label><div class="form-actions span-2"><button class="btn btn-primary" type="submit">Salvar item</button><button class="btn btn-ghost" type="button" data-close-form="inventory-form">Cancelar</button></div>
-          </form>
-          <div class="table-wrap"><table><thead><tr><th>Item</th><th>Sala</th><th>Qtde</th><th>Patrimônio / Série</th><th>Estado</th><th>Atualizado</th><th></th></tr></thead><tbody id="inventory-table"></tbody></table></div>
+          <div id="inventory-form-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="inventory-form-title" hidden>
+            <form id="inventory-form" class="modal-card entry-modal-card inventory-batch-modal">
+              <div class="modal-head"><div><p class="eyebrow">Inventário da sala</p><h2 id="inventory-form-title">Adicionar itens</h2><p class="muted">Monte uma lista. Cada quantidade gera uma linha para uma unidade física.</p></div><button class="modal-close" type="button" data-close-form="inventory-form" aria-label="Fechar">×</button></div>
+              <div class="inventory-batch-toolbar"><label>Sala<select id="inventory-room" required></select></label><div><strong id="inventory-batch-total">1 unidade física</strong><small>Máximo de 200 unidades por envio</small></div></div>
+              <div id="inventory-batch-list" class="inventory-batch-list"></div>
+              <button class="btn btn-secondary inventory-add-type" id="inventory-add-type" type="button">+ Adicionar outro item</button>
+              <div class="modal-footer"><p>Todos os itens serão cadastrados individualmente na sala selecionada.</p><div class="form-actions"><button class="btn btn-ghost" type="button" data-close-form="inventory-form">Cancelar</button><button class="btn btn-primary" type="submit">Salvar lista</button></div></div>
+            </form>
+          </div>
+          <div class="table-wrap"><table><thead><tr><th>Item</th><th>Sala</th><th>Patrimônio / Série</th><th>Estado</th><th>Atualizado</th><th></th></tr></thead><tbody id="inventory-table"></tbody></table></div>
+          </div>
+          <div id="inventory-view-unserviceable" hidden><div class="section-intro"><div><p class="eyebrow">Histórico</p><h2>Itens inservíveis</h2></div><p>Itens retirados do inventário ativo por não terem mais condição de uso.</p></div><div id="unserviceable-list" class="inventory-history-list"></div></div>
+          <div id="inventory-view-transfers" hidden><div class="section-intro"><div><p class="eyebrow">Movimentações</p><h2>Transferências entre unidades</h2></div><p>Receba itens destinados à unidade e acompanhe os itens enviados.</p></div><div class="section-title"><h2>Para receber nesta unidade</h2></div><div id="incoming-transfers" class="transfer-list"></div><div class="section-title"><h2>Enviadas por esta unidade</h2></div><div id="outgoing-transfers" class="transfer-list"></div></div>
         </section>
 
         <section id="tab-orders" class="tab-panel" hidden>
           <div class="page-heading"><div><p class="eyebrow">Lista permanente</p><h1>Pedidos de compra</h1><p class="muted">Abra uma sala para consultar os pedidos ou adicionar um novo pedido nela.</p></div></div>
-          <form id="order-form" class="inline-form expanded" hidden>
-            <label>Sala que receberá o item<select id="order-room" required></select></label><label>Item desejado<input id="order-name" required placeholder="Ex.: Cadeira fixa sem braço"></label><label>Quantidade<input id="order-quantity" type="number" min="1" value="1" required></label><label>Unidade de medida<select id="order-unit" required><option value="">Selecione a unidade</option><option>UNIDADE</option><option>CAIXA</option><option>PACOTE</option><option>KIT</option><option>LITRO</option><option>METRO</option></select></label><label>Prioridade<select id="order-priority" required><option value="">Selecione a prioridade</option><option>BAIXA</option><option>NORMAL</option><option>ALTA</option><option>URGENTE</option></select></label><label class="span-2">Justificativa<textarea id="order-justification" rows="2" required placeholder="Por que a unidade precisa deste item?"></textarea></label><div class="form-actions span-2"><button class="btn btn-primary" type="submit">Adicionar à lista</button><button class="btn btn-ghost" type="button" data-close-form="order-form">Cancelar</button></div>
-          </form>
+          <div id="order-form-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="order-form-title" hidden>
+            <form id="order-form" class="modal-card entry-modal-card">
+              <div class="modal-head"><div><p class="eyebrow">Pedido da sala</p><h2 id="order-form-title">Adicionar pedido de compra</h2><p class="muted">Informe o item e a quantidade necessária para esta sala.</p></div><button class="modal-close" type="button" data-close-form="order-form" aria-label="Fechar">×</button></div>
+              <div class="entry-form-grid"><label>Sala que receberá o item<select id="order-room" required></select></label><label>Item desejado<input id="order-name" required placeholder="Ex.: Cadeira fixa sem braço"></label><label>Quantidade<input id="order-quantity" type="number" min="1" value="1" required></label><label>Unidade de medida<select id="order-unit" required><option value="">Selecione a unidade</option><option>UNIDADE</option><option>CAIXA</option><option>PACOTE</option><option>KIT</option><option>LITRO</option><option>METRO</option></select></label><label>Prioridade<select id="order-priority" required><option value="">Selecione a prioridade</option><option>BAIXA</option><option>NORMAL</option><option>ALTA</option><option>URGENTE</option></select></label><label class="span-2">Justificativa<textarea id="order-justification" rows="3" required placeholder="Por que a unidade precisa deste item?"></textarea></label></div>
+              <div class="modal-footer"><p>O pedido será incluído na lista permanente da sala.</p><div class="form-actions"><button class="btn btn-ghost" type="button" data-close-form="order-form">Cancelar</button><button class="btn btn-primary" type="submit">Adicionar à lista</button></div></div>
+            </form>
+          </div>
           <div class="cart-header"><div><strong id="cart-count">0 itens</strong><span id="cart-total">0 unidades solicitadas</span></div><input id="order-search" type="search" placeholder="Buscar na lista"></div>
           <div id="orders-list" class="cart-grid"></div>
         </section>
@@ -147,6 +162,10 @@
         </section>
       </main>
     </div>
+  </div>
+
+  <div id="inventory-action-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="inventory-action-title" hidden>
+    <section class="modal-card inventory-action-card"><div class="modal-head"><div><p class="eyebrow" id="inventory-action-eyebrow">Movimentar item</p><h2 id="inventory-action-title">Selecionar destino</h2><p class="muted" id="inventory-action-copy"></p></div><button class="modal-close" id="close-inventory-action" type="button" aria-label="Fechar">×</button></div><form id="inventory-action-form" class="stack-form"><label id="inventory-action-select-label"><span id="inventory-action-select-text">Destino</span><select id="inventory-action-select" required></select></label><div class="modal-footer"><p id="inventory-action-warning"></p><div class="form-actions"><button class="btn btn-ghost" id="cancel-inventory-action" type="button">Cancelar</button><button class="btn btn-primary" id="confirm-inventory-action" type="submit">Confirmar</button></div></div></form></section>
   </div>
 
   <div id="export-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="export-title" hidden>
